@@ -21,6 +21,11 @@ enum AXWindowSystemError: Error, Equatable, CustomStringConvertible {
 
 /// `WindowSystem` backed by the Accessibility API.
 ///
+/// WindowIDs are stable while a window exists (the same AXUIElement, compared
+/// with CFEqual, keeps its id across enumerations) and are retired when the
+/// window disappears from an enumeration of its app. `forgetApplication` is
+/// for app termination.
+///
 /// Safety: the class is `@MainActor`, so all `AXUIElement` references and the
 /// handle table are only touched on the main actor. The `WindowSystem`
 /// protocol requirements are nonisolated (and `Sendable`), so they are
@@ -40,10 +45,14 @@ enum AXWindowSystemError: Error, Equatable, CustomStringConvertible {
 /// first and the app prompts via requestTrust().
 @MainActor
 final class AXWindowSystem: WindowSystem, @unchecked Sendable {
-    private var elements: [WindowID: AXUIElement] = [:]
-    private var nextHandle = 0
+    private let registry = StableHandleRegistry<AXUIElement>(isSame: { CFEqual($0, $1) })
 
     init() {}
+
+    /// Drops every handle of an application (call when it terminates).
+    func forgetApplication(pid: pid_t) {
+        registry.removeGroup(Int(pid))
+    }
 
     nonisolated var isTrusted: Bool { AXIsProcessTrusted() }
 
@@ -74,7 +83,6 @@ final class AXWindowSystem: WindowSystem, @unchecked Sendable {
     // MARK: - Implementation
 
     private func loadWindows(pid: pid_t) throws -> [WindowInfo] {
-        elements.removeAll()
         let app = AXUIElementCreateApplication(pid)
         var raw: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &raw)
@@ -85,18 +93,17 @@ final class AXWindowSystem: WindowSystem, @unchecked Sendable {
             throw AXWindowSystemError.unexpectedValue(attribute: "AXWindows")
         }
         let space = CoordinateSpace(primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+        let handles = registry.handles(for: list, in: Int(pid))
         var result: [WindowInfo] = []
-        for (index, element) in list.enumerated() {
+        for (index, handle) in handles.enumerated() {
+            let element = handle.element
             guard let origin = Self.point(element, kAXPositionAttribute),
                   let size = Self.size(element, kAXSizeAttribute) else { continue }
             let role = Self.string(element, kAXRoleAttribute)
             let subrole = Self.string(element, kAXSubroleAttribute)
             let minimized = Self.bool(element, kAXMinimizedAttribute) ?? false
-            nextHandle += 1
-            let id = WindowID(nextHandle)
-            elements[id] = element
             result.append(WindowInfo(
-                id: id,
+                id: handle.id,
                 frame: space.appKitRect(fromAXOrigin: origin, size: size),
                 isMinimized: minimized,
                 isStandard: AXRoleClassifier.isStandardWindow(role: role, subrole: subrole),
@@ -106,7 +113,7 @@ final class AXWindowSystem: WindowSystem, @unchecked Sendable {
     }
 
     private func applyFrame(_ frame: CGRect, to window: WindowID) throws {
-        guard let element = elements[window] else {
+        guard let element = registry.element(for: window) else {
             throw AXWindowSystemError.unknownWindow(window.rawValue)
         }
         let space = CoordinateSpace(primaryScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
