@@ -1,0 +1,24 @@
+import Foundation
+import CoreGraphics
+
+/// Abstraction over the platform window APIs (Accessibility). Implemented by the app layer.
+public protocol WindowSystem: Sendable {
+    /// Whether the process currently has the Accessibility permission.
+    var isTrusted: Bool { get }
+
+    /// PID of the frontmost application, or nil when there is no frontmost
+    /// app OR when it is our own process.
+    func frontmostApplicationPID() -> pid_t?
+
+    /// Windows of the given application. Frames are already in AppKit coordinates.
+    func windows(forApplication pid: pid_t) throws -> [WindowInfo]
+
+    /// Moves/resizes a window to `frame` (AppKit coordinates). Throws on per-window failure.
+    func setFrame(_ frame: CGRect, of window: WindowID) throws
+}
+
+/// Source of the currently connected screens.
+public protocol ScreenProvider: Sendable {
+    /// The current screens.
+    func screens() -> [ScreenInfo]
+}
