@@ -1,0 +1,84 @@
+name: FloTile
+options:
+  bundleIdPrefix: ie.boboco
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+# Repo root is both the xcodegen project dir and the SwiftPM package dir.
+packages:
+  FloTileCore:
+    path: .
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    DEVELOPMENT_TEAM: Y5SB82BPYL
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+
+targets:
+  FloTile:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+        excludes:
+          - "*.plist"
+          - "*.entitlements"
+      - path: App/Resources/Assets.xcassets
+      - path: App/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: FloTileCore
+        product: FloTileCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ie.boboco.FloTile
+        PRODUCT_NAME: FloTile
+        # Explicit checked-in Info.plist (not GENERATE_INFOPLIST_FILE).
+        INFOPLIST_FILE: App/Sources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Sources/FloTile.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+
+  FloTileAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/Tests
+    dependencies:
+      - target: FloTile
+      - package: FloTileCore
+        product: FloTileCore
+    settings:
+      base:
+        # Explicit TEST_HOST: macOS app executables live in Contents/MacOS/.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/FloTile.app/Contents/MacOS/FloTile"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        PRODUCT_BUNDLE_IDENTIFIER: ie.boboco.FloTile.tests
+        GENERATE_INFOPLIST_FILE: YES
+      configs:
+        debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+
+schemes:
+  FloTile:
+    build:
+      targets:
+        FloTile: [run, test, profile, archive]
+        FloTileAppTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FloTileAppTests
+    archive:
+      config: Release
