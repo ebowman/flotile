@@ -60,21 +60,35 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+brew install xcodegen librsvg
+make test          # FloTileCore package tests
+make coverage      # tests + coverage gate (COVERAGE_MIN, default 90)
+make app-test      # generate project, run app-hosted tests
+make app-test-ci   # same, ad-hoc signed (no certificate)
+make live-ax-test  # live Accessibility self-test (FLOTILE_LIVE_AX_TESTS=1, local only)
+make release       # see docs/RELEASING.md (release-dry-run first)
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+- `FloTileCore` (Package.swift, `Sources/FloTileCore`) holds the pure logic: grid/tiling math, window models, the updater. Foundation, CoreGraphics and CryptoKit only.
+- The app target `FloTile` (`project.yml`, `App/Sources`) is the AppKit shell: status item, menu, Settings, Accessibility.
+- Core talks to the system through protocols; the app supplies real adapters, tests supply fakes.
+- Plain click tiles the frontmost app's standard windows on the clicked display; option/right/control-click opens the menu.
+- The updater fetches `appcast.json` from GitHub Releases and verifies SHA-256 and notarization before installing; manual only.
+- The app is not sandboxed (Accessibility requires it), so distribution is Developer ID, not the Mac App Store.
+- Release pipeline in `scripts/`: build-app, make-dmg, notarize-dmg, publish-release (see `docs/RELEASING.md`).
+- CI: `.github/workflows/ci.yml` runs the coverage gate and app tests.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- FloTileCore never imports AppKit or ApplicationServices.
+- Coverage gate is at least 90% (currently about 97.7%).
+- One bead per commit, with the bead id in the message.
+- Scripts fail fast with specific error messages.
+- Never commit `.env` (notarization credentials).
+- Live tests are env-gated (`FLOTILE_LIVE_AX_TESTS=1`) and never run in CI.
 <!-- BEGIN domestique (managed) -->
 
 ## Active harness boundary (claude only)
