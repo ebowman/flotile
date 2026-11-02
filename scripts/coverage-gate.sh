@@ -42,17 +42,31 @@ if [ -z "$PROFDATA" ] || [ ! -f "$PROFDATA" ]; then
   exit 2
 fi
 
-# The xctest bundle sits in the products dir, one level above codecov/.
-PRODUCTS_DIR="$(dirname "$(dirname "$PROFDATA")")"
-BINARY="$PRODUCTS_DIR/FloTileCoreTests.xctest/Contents/MacOS/FloTileCoreTests"
-if [ ! -f "$BINARY" ]; then
-  BINARY="$(find .build -path '*FloTileCoreTests.xctest/Contents/MacOS/FloTileCoreTests' -print 2>/dev/null | head -n 1 || true)"
-  [ -n "$BINARY" ] && BINARY="$ROOT/${BINARY#./}"
-fi
+# Locate the xctest executable. Layout varies by toolchain (e.g. FloTileCoreTests
+# under .build/out/Products/Debug, or FloTilePackageTests under .build/<triple>/debug).
+pick_binary() { # $1 = directory to search; prints newest matching executable
+  local d="$1" f best="" 
+  [ -d "$d" ] || return 0
+  while IFS= read -r f; do
+    case "$f" in *.dSYM*) continue ;; esac
+    case "$(basename "$f")" in *PackageTests*|FloTileCoreTests) ;; *) continue ;; esac
+    if [ -z "$best" ] || [ "$f" -nt "$best" ]; then best="$f"; fi
+  done < <(find "$d" -type f -path '*.xctest/Contents/MacOS/*' 2>/dev/null)
+  [ -n "$best" ] && printf '%s\n' "$best"
+  return 0
+}
+BIN_DIR="$(swift build --show-bin-path --build-tests 2>/dev/null | tail -n 1 || true)"
+[ -n "$BIN_DIR" ] || BIN_DIR="$(swift build --show-bin-path 2>/dev/null | tail -n 1 || true)"
+BINARY="$(pick_binary "$BIN_DIR")"
+[ -n "$BINARY" ] || BINARY="$(pick_binary "$(dirname "$PROFDATA")/..")"
+[ -n "$BINARY" ] || BINARY="$(pick_binary .build)"
 if [ -z "$BINARY" ] || [ ! -f "$BINARY" ]; then
-  echo "error: FloTileCoreTests xctest binary not found under .build" >&2
+  echo "error: test xctest binary not found (bin path: ${BIN_DIR:-none}). xctest bundles under .build:" >&2
+  find .build -name '*.xctest' 2>&1 | head -n 20 >&2 || true
   exit 2
 fi
+case "$BINARY" in /*) ;; *) BINARY="$ROOT/${BINARY#./}" ;; esac
+echo "using binary: $BINARY profdata: $PROFDATA" >&2
 
 REPORT="$(xcrun llvm-cov report "$BINARY" -instr-profile "$PROFDATA" \
   -ignore-filename-regex='(Tests/|\.build/)' \
