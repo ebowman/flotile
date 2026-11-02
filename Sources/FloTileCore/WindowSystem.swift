@@ -11,6 +11,11 @@ public protocol WindowSystem: Sendable {
     func frontmostApplicationPID() -> pid_t?
 
     /// Windows of the given application. Frames are already in AppKit coordinates.
+    ///
+    /// Stability contract: a `WindowID` MUST be stable for the lifetime of a window
+    /// within the process (the same window returns the same id on every enumeration).
+    /// Ids are retired when the window disappears from an enumeration of its app.
+    /// Adapters should use `StableHandleRegistry` to achieve this.
     func windows(forApplication pid: pid_t) throws -> [WindowInfo]
 
     /// Moves/resizes a window to `frame` (AppKit coordinates). Throws on per-window failure.
