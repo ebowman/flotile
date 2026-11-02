@@ -9,7 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "FloTileCore"),
-        .testTarget(name: "FloTileCoreTests", dependencies: ["FloTileCore"]),
+        .testTarget(name: "FloTileCoreTests", dependencies: ["FloTileCore"], resources: [.process("Fixtures")]),
     ],
     swiftLanguageModes: [.v6]
 )

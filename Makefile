@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize
+.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize release release-dry-run
 
 build:
 	swift build
@@ -40,3 +40,11 @@ dmg:
 
 notarize:
 	scripts/notarize-dmg.sh
+
+# OPERATOR-INVOKED ONLY: creates a real GitHub release. Not a dependency of any
+# other target and never run by default or in CI.
+release:
+	scripts/publish-release.sh
+
+release-dry-run:
+	scripts/publish-release.sh --dry-run
