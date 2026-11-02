@@ -1,0 +1,43 @@
+import Foundation
+import CoreGraphics
+
+/// Outcome of deciding what a tile click should do given the last snapshot.
+///
+/// A second click undoes the previous tiling only when nothing has changed since:
+/// same app, same screen, same set of eligible windows, and every window still
+/// (approximately) where tiling left it. Otherwise the click tiles afresh.
+public enum UndoDecision: Equatable, Sendable {
+    /// Restore the `before` frames.
+    case restore
+    /// Tile again from scratch, for the given reason.
+    case tileFresh(Reason)
+
+    /// Why undo was not chosen.
+    public enum Reason: Equatable, Sendable {
+        case noSnapshot, differentApp, differentScreen, windowSetChanged, framesChanged
+    }
+
+    /// Decides between undo and a fresh tile. Checks run in this binding order:
+    /// no snapshot, pid mismatch, screen mismatch, window-set mismatch, frame drift.
+    public static func decide(
+        snapshot: TileSnapshot?,
+        frontmostPID: pid_t,
+        screenID: ScreenID,
+        currentEligibleWindows: [WindowInfo],
+        tolerance: CGFloat = 2
+    ) -> UndoDecision {
+        guard let snapshot else { return .tileFresh(.noSnapshot) }
+        if snapshot.pid != frontmostPID { return .tileFresh(.differentApp) }
+        if snapshot.screenID != screenID { return .tileFresh(.differentScreen) }
+        if Set(currentEligibleWindows.map(\.id)) != Set(snapshot.after.keys) {
+            return .tileFresh(.windowSetChanged)
+        }
+        for w in currentEligibleWindows {
+            guard let expected = snapshot.after[w.id],
+                  FrameComparison.approximatelyEqual(w.frame, expected, tolerance: tolerance) else {
+                return .tileFresh(.framesChanged)
+            }
+        }
+        return .restore
+    }
+}
