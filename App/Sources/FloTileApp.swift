@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var permissionFlow: AccessibilityPermissionFlow?
     private var settingsModel: SettingsModel?
+    private var session: TileSession?
+    private var terminationObserver: NSObjectProtocol?
 
     static func main() {
         let app = NSApplication.shared
@@ -34,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowSystem = AXWindowSystem()
         let screens = AppKitScreenProvider()
         let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: screens)
+        let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
+        self.session = session
         permissionFlow = AccessibilityPermissionFlow(requestTrust: { windowSystem.requestTrust() })
         let presenter = TileOutcomePresenter(
             log: { message in Self.logger.error("\(message, privacy: .public)") },
@@ -41,8 +45,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.handleAccessibilityNotGranted()
             }
         )
+        // Resolved lazily so the controller closures can read the status button.
+        weak var controllerRef: StatusItemController?
         let controller = StatusItemController(
-            onTile: { screen in presenter.present(coordinator.tile(on: screen)) },
+            onTile: { screen in
+                let outcome = session.handleClick(on: screen)
+                let context: TileOutcomePresenter.Context = session.lastDecision == .restore ? .restoring : .tiling
+                presenter.present(outcome, context: context)
+            },
+            canUndo: {
+                guard let screen = AppKitScreenProvider.targetScreen(forStatusButton: controllerRef?.statusButton) else {
+                    return false
+                }
+                return session.canUndo(frontmostPID: windowSystem.frontmostApplicationPID(), on: screen)
+            },
+            onUndo: {
+                guard let screen = AppKitScreenProvider.targetScreen(forStatusButton: controllerRef?.statusButton) else {
+                    return
+                }
+                presenter.present(session.undo(on: screen), context: .restoring)
+            },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onCheckForUpdates: {
                 let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
@@ -50,7 +72,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onQuit: { NSApp.terminate(nil) }
         )
+        controllerRef = controller
         statusItemController = controller
+        terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            let pid = app.processIdentifier
+            MainActor.assumeIsolated {
+                session.forget(pid: pid)
+                windowSystem.forgetApplication(pid: pid)
+            }
+        }
         if !controller.install() {
             Self.logger.warning("Could not install status item")
         }

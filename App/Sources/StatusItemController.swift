@@ -9,22 +9,30 @@ final class StatusItemController: NSObject {
 
     private var statusItem: NSStatusItem?
     private let onTile: (ScreenInfo) -> Void
+    private let canUndo: () -> Bool
+    private let onUndo: () -> Void
     private let onOpenSettings: () -> Void
     private let onCheckForUpdates: () -> Void
     private let onQuit: () -> Void
 
     init(
         onTile: @escaping (ScreenInfo) -> Void,
+        canUndo: @escaping () -> Bool,
+        onUndo: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.onTile = onTile
+        self.canUndo = canUndo
+        self.onUndo = onUndo
         self.onOpenSettings = onOpenSettings
         self.onCheckForUpdates = onCheckForUpdates
         self.onQuit = onQuit
         super.init()
     }
+
+    var statusButton: NSStatusBarButton? { statusItem?.button }
 
     /// Returns false (creating nothing) if the system gave no button.
     @discardableResult
@@ -75,6 +83,14 @@ final class StatusItemController: NSObject {
 
     func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.autoenablesItems = false
+        // canUndo is evaluated here, at build time: showMenu builds the menu before
+        // performClick, so the frontmost app is the one the user was working in.
+        let undo = NSMenuItem(title: "Undo Tiling", action: #selector(undoItemSelected), keyEquivalent: "")
+        undo.target = self
+        undo.isEnabled = canUndo()
+        menu.addItem(undo)
+        menu.addItem(NSMenuItem.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(settingsItemSelected), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -99,6 +115,7 @@ final class StatusItemController: NSObject {
         item.menu = nil
     }
 
+    @objc private func undoItemSelected() { onUndo() }
     @objc private func settingsItemSelected() { onOpenSettings() }
     @objc private func checkForUpdatesItemSelected() { onCheckForUpdates() }
     @objc private func quitItemSelected() { onQuit() }

@@ -11,6 +11,9 @@ struct TileOutcomePresenter {
         self.onAccessibilityNotGranted = onAccessibilityNotGranted
     }
 
+    /// Whether the outcome came from a tiling click or from restoring a snapshot (affects log wording).
+    enum Context { case tiling, restoring }
+
     static func isSilent(_ outcome: TileOutcome) -> Bool {
         switch outcome {
         case .tiled, .restored, .noWindows, .noFrontmostApp, .nothingToUndo: return true
@@ -18,12 +21,13 @@ struct TileOutcomePresenter {
         }
     }
 
-    func present(_ outcome: TileOutcome) {
+    func present(_ outcome: TileOutcome, context: Context = .tiling) {
         switch outcome {
         case .tiled, .restored, .noWindows, .noFrontmostApp, .nothingToUndo:
             break
         case let .partial(succeeded, failed):
-            log("Tiled \(succeeded) window(s); \(failed) could not be moved")
+            let verb = context == .restoring ? "Restored" : "Tiled"
+            log("\(verb) \(succeeded) window(s); \(failed) could not be moved")
         case let .failed(reason):
             log("Tiling failed: \(reason)")
         case .accessibilityNotGranted:

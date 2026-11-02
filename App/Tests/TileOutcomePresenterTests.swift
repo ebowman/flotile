@@ -16,7 +16,7 @@ final class TileOutcomePresenterTests: XCTestCase {
     }
 
     func testSilentOutcomes() {
-        for outcome in [TileOutcome.tiled(count: 3), .noWindows, .noFrontmostApp] {
+        for outcome in [TileOutcome.tiled(count: 3), .noWindows, .noFrontmostApp, .restored(count: 2), .nothingToUndo] {
             let (p, r) = make()
             p.present(outcome)
             XCTAssertTrue(r.logs.isEmpty)
@@ -28,8 +28,24 @@ final class TileOutcomePresenterTests: XCTestCase {
         let (p, r) = make()
         p.present(.partial(succeeded: 4, failed: 2))
         XCTAssertEqual(r.logs.count, 1)
-        XCTAssertTrue(r.logs[0].contains("4") && r.logs[0].contains("2"))
+        XCTAssertEqual(r.logs[0], "Tiled 4 window(s); 2 could not be moved")
         XCTAssertEqual(r.permissionCalls, 0)
+    }
+
+    func testPartialAfterRestoreUsesRestoredWording() {
+        let (p, r) = make()
+        p.present(.partial(succeeded: 4, failed: 2), context: .restoring)
+        XCTAssertEqual(r.logs, ["Restored 4 window(s); 2 could not be moved"])
+    }
+
+    func testRestoredAndNothingToUndoSilentInBothContexts() {
+        for context in [TileOutcomePresenter.Context.tiling, .restoring] {
+            let (p, r) = make()
+            p.present(.restored(count: 2), context: context)
+            p.present(.nothingToUndo, context: context)
+            XCTAssertTrue(r.logs.isEmpty)
+            XCTAssertEqual(r.permissionCalls, 0)
+        }
     }
 
     func testFailedLogs() {
@@ -51,6 +67,8 @@ final class TileOutcomePresenterTests: XCTestCase {
         XCTAssertTrue(TileOutcomePresenter.isSilent(.tiled(count: 1)))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.noWindows))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.noFrontmostApp))
+        XCTAssertTrue(TileOutcomePresenter.isSilent(.restored(count: 1)))
+        XCTAssertTrue(TileOutcomePresenter.isSilent(.nothingToUndo))
         XCTAssertFalse(TileOutcomePresenter.isSilent(.partial(succeeded: 1, failed: 1)))
         XCTAssertFalse(TileOutcomePresenter.isSilent(.failed(reason: "x")))
         XCTAssertFalse(TileOutcomePresenter.isSilent(.accessibilityNotGranted))
