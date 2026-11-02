@@ -71,6 +71,14 @@ final class TileCoordinatorSnapshotTests: XCTestCase {
         XCTAssertEqual(Set(snap.after.keys), [WindowID(1)])
     }
 
+    func testRereadWithNoTiledIdsYieldsNilSnapshot() {
+        let (c, ws) = make([win(1), win(2)])
+        ws.onSetFrame = { _, _ in ws.windowsByPID[100] = [self.win(9)] }
+        let result = c.tileAndSnapshot(on: screen)
+        XCTAssertEqual(result.outcome, .tiled(count: 2))
+        XCTAssertNil(result.snapshot)
+    }
+
     func testRereadThrowingFallsBackToRequested() throws {
         let (c, ws) = make([win(1)])
         ws.onSetFrame = { _, _ in ws.windowsError = FakeWindowSystemError(description: "gone") }

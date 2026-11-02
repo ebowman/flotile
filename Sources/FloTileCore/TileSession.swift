@@ -6,7 +6,8 @@ import CoreGraphics
 /// In plain words: clicking tiles the frontmost app's windows and remembers where
 /// they were. Clicking again undoes the tiling only if nothing has changed since
 /// (same app, same screen, same windows, every window still where tiling left it).
-/// If anything changed, the click tiles afresh and replaces the old snapshot.
+/// If anything changed, the click tiles afresh and replaces the old snapshot (only when the new tile
+/// produced one; a tile that yields no snapshot keeps the previous snapshot).
 /// Each app has its own snapshot, and a snapshot is consumed when it is restored.
 @MainActor
 public final class TileSession {
@@ -55,7 +56,10 @@ public final class TileSession {
             return restoreAndClear(pid: pid, snapshot: snapshots[pid]!)
         case .tileFresh:
             let result = coordinator.tileAndSnapshot(on: screen)
-            snapshots[pid] = result.snapshot
+            // A tile that produced no snapshot (failed enumeration, no windows, nothing moved)
+            // must not discard the previous one; UndoDecision's window-set/frame guards already
+            // prevent a stale snapshot from being restored against a changed layout.
+            if let snapshot = result.snapshot { snapshots[pid] = snapshot }
             return result.outcome
         }
     }

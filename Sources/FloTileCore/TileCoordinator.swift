@@ -89,6 +89,9 @@ public struct TileCoordinator: Sendable {
                 after[window.id] = window.frame
             }
         }
+        // An empty `after` would make UndoDecision treat "no windows at all" (e.g. a later
+        // enumeration failure) as unchanged and restore a stale layout, so store no snapshot.
+        if after.isEmpty { return (outcome, nil) }
         let snapshot = TileSnapshot(pid: pid, screenID: screen.id, before: before, after: after, takenAt: now())
         return (outcome, snapshot)
     }

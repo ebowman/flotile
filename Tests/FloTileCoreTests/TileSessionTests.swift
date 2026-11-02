@@ -49,6 +49,23 @@ final class TileSessionTests: XCTestCase {
         XCTAssertEqual(s.lastDecision, .restore)
     }
 
+    func testWindowsThrowingKeepsSnapshotAndDoesNotRestore() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)])
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertEqual(s.snapshotCount, 1)
+        let phase1 = ws.setFrameCalls.count
+        ws.windowsError = FakeWindowSystemError(description: "transient")
+        let outcome = s.handleClick(on: screen)
+        guard case .failed = outcome else { return XCTFail("expected .failed, got \(outcome)") }
+        XCTAssertEqual(s.snapshotCount, 1)
+        guard case .tileFresh = s.lastDecision else { return XCTFail("expected tileFresh, got \(String(describing: s.lastDecision))") }
+        XCTAssertNotEqual(s.lastDecision, .restore)
+        XCTAssertEqual(ws.setFrameCalls.count, phase1)
+        ws.windowsError = nil
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+    }
+
     func testMovedWindowTilesFreshAndReplacesSnapshot() {
         let (s, ws) = make([win(1), win(2)])
         XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
