@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "FloTile",
+  "project_id": "7793cfbf-7e06-4dd7-9a4a-e376f89fa53e"
+}
