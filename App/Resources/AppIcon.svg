@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FloTile app icon source of truth. Regenerate PNGs with `make icon`. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3FB6C9"/>
+      <stop offset="1" stop-color="#2F5FC4"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon body: 824x824 centered (100px margin), corner radius 22.37% = 184 -->
+  <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="url(#bg)"/>
+  <!-- 2x2 tiles: 260px each, 44px gap, grid 564px centered (start 230) -->
+  <rect x="230" y="230" width="260" height="260" rx="56" fill="#FFFFFF"/>
+  <rect x="534" y="230" width="260" height="260" rx="56" fill="#FFFFFF" fill-opacity="0.55"/>
+  <rect x="230" y="534" width="260" height="260" rx="56" fill="#FFFFFF"/>
+  <rect x="534" y="534" width="260" height="260" rx="56" fill="#FFFFFF"/>
+</svg>

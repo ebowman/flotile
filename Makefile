@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test
+.PHONY: build test coverage clean xcodeproj app-build app-test icon
 
 build:
 	swift build
@@ -28,3 +28,6 @@ app-build: xcodeproj
 app-test: xcodeproj
 	xcodebuild test -project FloTile.xcodeproj -scheme FloTile -destination 'platform=macOS' \
 		-derivedDataPath .build/xcode
+
+icon:
+	scripts/generate-icon.sh
