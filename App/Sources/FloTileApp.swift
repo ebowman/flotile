@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItemController: StatusItemController?
     private var permissionFlow: AccessibilityPermissionFlow?
+    private var settingsModel: SettingsModel?
 
     static func main() {
         let app = NSApplication.shared
@@ -22,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.logger.info("FloTile launched")
 
+        settingsModel = SettingsModel(loginItems: SMAppServiceLoginItem())
         let windowSystem = AXWindowSystem()
         let screens = AppKitScreenProvider()
         let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: screens)
@@ -49,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSettings() {
-        // TODO(FloTile-3kk.13): present the settings window.
         Self.logger.info("Settings requested")
+        if let settingsModel { SettingsWindowController.showShared(model: settingsModel) }
     }
 }
