@@ -37,6 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = StatusItemController(
             onTile: { screen in presenter.present(coordinator.tile(on: screen)) },
             onOpenSettings: { [weak self] in self?.openSettings() },
+            onCheckForUpdates: {
+                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+                UpdateChecker.checkForUpdates(currentVersion: version)
+            },
             onQuit: { NSApp.terminate(nil) }
         )
         statusItemController = controller

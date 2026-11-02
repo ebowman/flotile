@@ -10,15 +10,18 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private let onTile: (ScreenInfo) -> Void
     private let onOpenSettings: () -> Void
+    private let onCheckForUpdates: () -> Void
     private let onQuit: () -> Void
 
     init(
         onTile: @escaping (ScreenInfo) -> Void,
         onOpenSettings: @escaping () -> Void,
+        onCheckForUpdates: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.onTile = onTile
         self.onOpenSettings = onOpenSettings
+        self.onCheckForUpdates = onCheckForUpdates
         self.onQuit = onQuit
         super.init()
     }
@@ -75,6 +78,9 @@ final class StatusItemController: NSObject {
         let settings = NSMenuItem(title: "Settings…", action: #selector(settingsItemSelected), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesItemSelected), keyEquivalent: "")
+        updates.target = self
+        menu.addItem(updates)
         menu.addItem(NSMenuItem.separator())
         let quit = NSMenuItem(title: "Quit FlöTile", action: #selector(quitItemSelected), keyEquivalent: "q")
         quit.target = self
@@ -94,5 +100,6 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func settingsItemSelected() { onOpenSettings() }
+    @objc private func checkForUpdatesItemSelected() { onCheckForUpdates() }
     @objc private func quitItemSelected() { onQuit() }
 }
