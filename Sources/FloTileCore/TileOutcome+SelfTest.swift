@@ -10,6 +10,7 @@ public extension TileOutcome {
         case .tiled(let count): return "tiled:\(count)"
         case .partial(let succeeded, let failed): return "partial:\(succeeded)/\(failed)"
         case .restored(let count): return "restored:\(count)"
+        case .nothingToUndo: return "nothingToUndo"
         case .failed(let reason): return "failed:\(reason)"
         }
     }

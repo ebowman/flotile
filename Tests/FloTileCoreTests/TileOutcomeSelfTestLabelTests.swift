@@ -29,4 +29,8 @@ final class TileOutcomeSelfTestLabelTests: XCTestCase {
     func testFailed() {
         XCTAssertEqual(TileOutcome.failed(reason: "boom").selfTestLabel, "failed:boom")
     }
+
+    func testNothingToUndo() {
+        XCTAssertEqual(TileOutcome.nothingToUndo.selfTestLabel, "nothingToUndo")
+    }
 }

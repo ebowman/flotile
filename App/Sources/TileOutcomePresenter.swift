@@ -13,14 +13,14 @@ struct TileOutcomePresenter {
 
     static func isSilent(_ outcome: TileOutcome) -> Bool {
         switch outcome {
-        case .tiled, .restored, .noWindows, .noFrontmostApp: return true
+        case .tiled, .restored, .noWindows, .noFrontmostApp, .nothingToUndo: return true
         case .partial, .failed, .accessibilityNotGranted: return false
         }
     }
 
     func present(_ outcome: TileOutcome) {
         switch outcome {
-        case .tiled, .restored, .noWindows, .noFrontmostApp:
+        case .tiled, .restored, .noWindows, .noFrontmostApp, .nothingToUndo:
             break
         case let .partial(succeeded, failed):
             log("Tiled \(succeeded) window(s); \(failed) could not be moved")
