@@ -12,6 +12,8 @@ final class FakeWindowSystem: WindowSystem, @unchecked Sendable {
     var windowsByPID: [pid_t: [WindowInfo]] = [:]
     var windowsError: Error?
     var failingWindowIDs: Set<WindowID> = []
+    /// Optional hook run after a successful setFrame; lets tests mutate `windowsByPID`.
+    var onSetFrame: ((WindowID, CGRect) -> Void)?
     private(set) var setFrameCalls: [(WindowID, CGRect)] = []
     private(set) var windowsCallCount = 0
     private(set) var frontmostCallCount = 0
@@ -32,5 +34,6 @@ final class FakeWindowSystem: WindowSystem, @unchecked Sendable {
         if failingWindowIDs.contains(window) {
             throw FakeWindowSystemError(description: "setFrame failed for \(window.rawValue)")
         }
+        onSetFrame?(window, frame)
     }
 }

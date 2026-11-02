@@ -22,6 +22,10 @@ final class TileOutcomeSelfTestLabelTests: XCTestCase {
         XCTAssertEqual(TileOutcome.partial(succeeded: 1, failed: 3).selfTestLabel, "partial:1/3")
     }
 
+    func testRestored() {
+        XCTAssertEqual(TileOutcome.restored(count: 4).selfTestLabel, "restored:4")
+    }
+
     func testFailed() {
         XCTAssertEqual(TileOutcome.failed(reason: "boom").selfTestLabel, "failed:boom")
     }

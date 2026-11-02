@@ -12,6 +12,8 @@ public enum TileOutcome: Equatable, Sendable {
     case tiled(count: Int)
     /// Some windows could not be positioned (includes the all-failed case).
     case partial(succeeded: Int, failed: Int)
+    /// Every window of a snapshot was moved back to its pre-tile frame.
+    case restored(count: Int)
     /// Windows could not be enumerated; `reason` describes the error.
     case failed(reason: String)
 }
