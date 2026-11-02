@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg
+.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize
 
 build:
 	swift build
@@ -37,3 +37,6 @@ release-build:
 
 dmg:
 	scripts/make-dmg.sh
+
+notarize:
+	scripts/notarize-dmg.sh
