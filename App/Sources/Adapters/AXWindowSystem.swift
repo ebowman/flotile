@@ -28,13 +28,16 @@ enum AXWindowSystemError: Error, Equatable, CustomStringConvertible {
 /// That is safe because `TileCoordinator` is only ever invoked from the main
 /// thread; a violation traps rather than racing.
 ///
-/// Sandbox note: FloTile ships sandboxed (com.apple.security.app-sandbox) for
-/// the Mac App Store. The Accessibility API (AXUIElement read/write on other
-/// apps' windows) is permitted inside the sandbox once the user grants FloTile
-/// in System Settings > Privacy & Security > Accessibility (AXIsProcessTrusted);
-/// no entitlement or temporary exception is needed. Without that grant every AX
-/// call fails with apiDisabled/cannotComplete, which is why TileCoordinator
-/// checks isTrusted first and the app prompts via requestTrust().
+/// Distribution note: FloTile is deliberately NOT sandboxed (Developer ID
+/// distribution). Sandboxed processes are denied the mach lookup of other
+/// apps' com.apple.axserver by launchd ("Sandbox restriction"), so the
+/// Accessibility API cannot work inside the sandbox. The user still grants
+/// FloTile in the Accessibility permissions pane (titled "Device Control and
+/// Data Access" on macOS 27); AXIsProcessTrusted reports it. The grant is tied
+/// to the code signature, so ad-hoc self-builds must re-grant after each
+/// rebuild. Without the grant every AX call fails with
+/// apiDisabled/cannotComplete, which is why TileCoordinator checks isTrusted
+/// first and the app prompts via requestTrust().
 @MainActor
 final class AXWindowSystem: WindowSystem, @unchecked Sendable {
     private var elements: [WindowID: AXUIElement] = [:]

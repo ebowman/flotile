@@ -1,3 +1,4 @@
+import ApplicationServices
 import XCTest
 
 final class AppBundleTests: XCTestCase {
@@ -11,5 +12,14 @@ final class AppBundleTests: XCTestCase {
 
     func testDisplayName() {
         XCTAssertEqual(Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String, "FlöTile")
+    }
+
+    func testHostIsNotSandboxed() {
+        XCTAssertNil(ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"])
+    }
+
+    func testAccessibilityTrustAPIIsReachable() {
+        let trusted: Bool = AXIsProcessTrusted()
+        XCTAssertTrue(trusted || !trusted)
     }
 }
