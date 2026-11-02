@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static var delegate: AppDelegate?
 
     private var statusItemController: StatusItemController?
+    private var permissionFlow: AccessibilityPermissionFlow?
 
     static func main() {
         let app = NSApplication.shared
@@ -24,10 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowSystem = AXWindowSystem()
         let screens = AppKitScreenProvider()
         let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: screens)
+        permissionFlow = AccessibilityPermissionFlow(requestTrust: { windowSystem.requestTrust() })
         let presenter = TileOutcomePresenter(
             log: { message in Self.logger.error("\(message, privacy: .public)") },
             onAccessibilityNotGranted: { [weak self] in
-                self?.handleAccessibilityNotGranted(windowSystem: windowSystem)
+                self?.handleAccessibilityNotGranted()
             }
         )
         let controller = StatusItemController(
@@ -41,10 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func handleAccessibilityNotGranted(windowSystem: AXWindowSystem) {
-        // TODO(FloTile-3kk.12): replace with the explanatory alert flow.
+    private func handleAccessibilityNotGranted() {
         Self.logger.info("Accessibility not granted")
-        windowSystem.requestTrust()
+        permissionFlow?.present()
     }
 
     private func openSettings() {
