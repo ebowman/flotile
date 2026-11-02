@@ -25,4 +25,24 @@ final class SelfTestReportTests: XCTestCase {
     func testErrorJSON() {
         XCTAssertEqual(SelfTestReport.errorJSON("bad"), "{\"error\":\"bad\"}")
     }
+
+    func testUndoJSONHasBothPhasesWithSortedKeys() {
+        let json = SelfTestReport.undoJSON(
+            first: ("tiled:2", [CGRect(x: 0, y: 25, width: 720, height: 875)]),
+            second: ("restored:2", [CGRect(x: 120, y: 140, width: 600, height: 400)]),
+            screen: CGRect(x: 0, y: 25, width: 1440, height: 875))
+        XCTAssertEqual(json, """
+        {"first":{"frames":[[0,25,720,875]],"outcome":"tiled:2"},\
+        "screen":{"h":875,"w":1440,"x":0,"y":25},\
+        "second":{"frames":[[120,140,600,400]],"outcome":"restored:2"}}
+        """)
+        XCTAssertFalse(json.contains("\n"))
+    }
+
+    func testUndoJSONEmptyFramesAndFractions() {
+        let json = SelfTestReport.undoJSON(first: ("noWindows", []), second: ("noWindows", []),
+                                           screen: CGRect(x: 0, y: 0, width: 10.5, height: 20))
+        XCTAssertTrue(json.contains("\"first\":{\"frames\":[],\"outcome\":\"noWindows\"}"), json)
+        XCTAssertTrue(json.contains("\"w\":10.5"), json)
+    }
 }

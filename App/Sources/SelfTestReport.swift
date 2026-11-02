@@ -15,6 +15,22 @@ enum SelfTestReport {
         return serialize(object)
     }
 
+    /// Two-phase report for `--self-test-tile-undo`: the first and second click.
+    static func undoJSON(first: (outcome: String, frames: [CGRect]),
+                         second: (outcome: String, frames: [CGRect]),
+                         screen: CGRect) -> String {
+        func phase(_ p: (outcome: String, frames: [CGRect])) -> [String: Any] {
+            ["outcome": p.outcome, "frames": p.frames.map(array)]
+        }
+        let object: [String: Any] = [
+            "first": phase(first),
+            "second": phase(second),
+            "screen": ["x": number(screen.minX), "y": number(screen.minY),
+                       "w": number(screen.width), "h": number(screen.height)],
+        ]
+        return serialize(object)
+    }
+
     static func errorJSON(_ description: String) -> String {
         serialize(["error": description])
     }

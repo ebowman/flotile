@@ -30,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { Self.runSelfTest() }
             return
         }
+        if CommandLine.arguments.contains("--self-test-tile-undo") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { Self.runUndoSelfTest() }
+            return
+        }
         #endif
 
         settingsModel = SettingsModel(loginItems: SMAppServiceLoginItem())
@@ -113,17 +117,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var ignored: [CGRect] = []
         if let pid {
             do {
-                let all = try windowSystem.windows(forApplication: pid)
-                let eligible = WindowSelector.eligibleWindows(all, on: screen)
-                let eligibleIDs = Set(eligible.map(\.id))
-                frames = WindowSelector.readingOrder(eligible).map(\.frame)
-                ignored = all.filter { !eligibleIDs.contains($0.id) }.map(\.frame)
+                (frames, ignored) = try rereadWindows(windowSystem, pid: pid, on: screen)
             } catch {
                 finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
             }
         }
         finish(SelfTestReport.json(outcome: outcome.selfTestLabel, screen: screen.visibleFrame,
                                    frames: frames, ignored: ignored), code: 0)
+    }
+
+    /// Eligible window frames (reading order) and ignored window frames of `pid`.
+    private static func rereadWindows(_ windowSystem: AXWindowSystem, pid: pid_t,
+                                      on screen: ScreenInfo) throws -> (frames: [CGRect], ignored: [CGRect]) {
+        let all = try windowSystem.windows(forApplication: pid)
+        let eligible = WindowSelector.eligibleWindows(all, on: screen)
+        let eligibleIDs = Set(eligible.map(\.id))
+        return (WindowSelector.readingOrder(eligible).map(\.frame),
+                all.filter { !eligibleIDs.contains($0.id) }.map(\.frame))
+    }
+
+    /// Live undo self-test: click, wait 1 s, click again; prints one JSON line.
+    private static func runUndoSelfTest() {
+        func finish(_ line: String, code: Int32) -> Never {
+            print(line)
+            fflush(stdout)
+            exit(code)
+        }
+        guard let screen = AppKitScreenProvider.targetScreen(forStatusButton: nil) else {
+            finish(SelfTestReport.errorJSON("no screen available"), code: 1)
+        }
+        let windowSystem = AXWindowSystem()
+        let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: AppKitScreenProvider())
+        let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
+        guard let pid = windowSystem.frontmostApplicationPID() else {
+            finish(SelfTestReport.errorJSON("no frontmost application"), code: 1)
+        }
+        let outcome1 = session.handleClick(on: screen)
+        let frames1: [CGRect]
+        do { frames1 = try rereadWindows(windowSystem, pid: pid, on: screen).frames } catch {
+            finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let outcome2 = session.handleClick(on: screen)
+            let frames2: [CGRect]
+            do { frames2 = try rereadWindows(windowSystem, pid: pid, on: screen).frames } catch {
+                finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
+            }
+            finish(SelfTestReport.undoJSON(first: (outcome1.selfTestLabel, frames1),
+                                           second: (outcome2.selfTestLabel, frames2),
+                                           screen: screen.visibleFrame), code: 0)
+        }
     }
     #endif
 

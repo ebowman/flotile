@@ -16,7 +16,12 @@
 # untitled documents plus the Fonts panel (a non-standard window), runs
 # `FloTile --self-test-tile` (DEBUG-only mode, prints one JSON line), and asserts
 # the two documents were tiled side by side on the screen's visible frame and the
-# Fonts panel was NOT moved. Then it cleans up.
+# Fonts panel was NOT moved. It then moves the two documents to known arbitrary
+# frames (System Events), runs `FloTile --self-test-tile-undo` (click, wait 1 s,
+# click) and asserts first.outcome == tiled:2, second.outcome == restored:2, the
+# restored sizes/x match the recorded originals (2 pt) and the documents' positions
+# re-read via System Events after the undo equal the recorded originals (2 pt, no
+# coordinate conversion), and that the Fonts panel never moved. Then it cleans up.
 set -euo pipefail
 
 if [[ "${FLOTILE_LIVE_AX_TESTS:-}" != "1" ]]; then
@@ -144,5 +149,67 @@ if min(ax + aw, bx + bw) - max(ax, bx) > 0 and min(ay + ah, by + bh) - max(ay, b
 if aw + bw != sw or ah != sh or bh != sh: fail("frames do not tile the screen side by side")
 if before != after: fail("Fonts panel moved: %s -> %s" % (before, after))
 if not d["ignored"]: fail("Fonts panel not reported in 'ignored' (expected a non-standard window)")
+print("live-ax-test: tiling assertions OK")
+PY
+
+# ---- Undo phase -------------------------------------------------------------
+doc_geom() { # $1 = document/window name -> "x,y,w,h" (AppleScript top-left coords)
+  osascript -e "tell application \"System Events\" to tell process \"TextEdit\" to set p to position of window \"$1\"" \
+            -e "tell application \"System Events\" to tell process \"TextEdit\" to set z to size of window \"$1\"" \
+            -e 'return ((item 1 of p) as text) & "," & ((item 2 of p) as text) & "," & ((item 1 of z) as text) & "," & ((item 2 of z) as text)' \
+    | tr -d ' '
+}
+if [[ "${#CREATED_DOCS[@]}" != "2" ]]; then
+  echo "expected 2 created documents, got ${#CREATED_DOCS[@]}" >&2; exit 1
+fi
+DOC_A="${CREATED_DOCS[0]}"; DOC_B="${CREATED_DOCS[1]}"
+set_geom() { # name x y w h
+  osascript -e "tell application \"System Events\" to tell process \"TextEdit\" to set size of window \"$1\" to {$4, $5}" \
+            -e "tell application \"System Events\" to tell process \"TextEdit\" to set position of window \"$1\" to {$2, $3}" >/dev/null
+}
+set_geom "$DOC_A" 120 140 600 400
+set_geom "$DOC_B" 700 420 520 380
+sleep 0.5
+ORIG_A="$(doc_geom "$DOC_A")"; ORIG_B="$(doc_geom "$DOC_B")"
+echo "Recorded originals: $DOC_A=$ORIG_A $DOC_B=$ORIG_B"
+PANEL_BEFORE_UNDO="$(panel_pos)" || exit 1
+
+osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
+sleep 0.5
+UNDO_OUT="build/live-ax-undo.json"
+"$APP/Contents/MacOS/FloTile" --self-test-tile-undo >"$UNDO_OUT" || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; exit 1; }
+sleep 0.5
+AFTER_A="$(doc_geom "$DOC_A")"; AFTER_B="$(doc_geom "$DOC_B")"
+PANEL_AFTER_UNDO="$(panel_pos)" || exit 1
+echo "Undo self-test JSON: $(cat "$UNDO_OUT")"
+echo "After undo: $DOC_A=$AFTER_A $DOC_B=$AFTER_B"
+
+python3 -I - "$UNDO_OUT" "$ORIG_A" "$AFTER_A" "$ORIG_B" "$AFTER_B" "$BEFORE" "$PANEL_BEFORE_UNDO" "$PANEL_AFTER_UNDO" <<'PY'
+import json, sys
+raw = open(sys.argv[1]).read()
+def fail(msg):
+    print("ASSERTION FAILED: " + msg, file=sys.stderr)
+    print(raw, file=sys.stderr)
+    sys.exit(1)
+def geom(t): return [float(v) for v in t.split(",")]
+try:
+    d = json.loads(raw)
+except Exception as e:
+    fail("invalid JSON: %s" % e)
+if "error" in d: fail("undo self-test reported error")
+if d["first"]["outcome"] != "tiled:2": fail("first.outcome != tiled:2")
+if d["second"]["outcome"] != "restored:2": fail("second.outcome != restored:2")
+if len(d["second"]["frames"]) != 2: fail("expected 2 restored frames")
+origs = [geom(sys.argv[2]), geom(sys.argv[4])]
+afters = [geom(sys.argv[3]), geom(sys.argv[5])]
+for o, a in zip(origs, afters):
+    if any(abs(x - y) > 2 for x, y in zip(o, a)):
+        fail("document not restored to original: %s -> %s" % (o, a))
+# JSON frames (AppKit coords): sizes and x must match the originals, in some order.
+want = sorted((o[0], o[2], o[3]) for o in origs)
+got = sorted((f[0], f[2], f[3]) for f in d["second"]["frames"])
+for w, g in zip(want, got):
+    if any(abs(x - y) > 2 for x, y in zip(w, g)): fail("second.frames x/size differ from originals: %s vs %s" % (want, got))
+if not (sys.argv[6] == sys.argv[7] == sys.argv[8]): fail("Fonts panel moved: %s / %s / %s" % tuple(sys.argv[6:9]))
 print("live-ax-test: PASS")
 PY
