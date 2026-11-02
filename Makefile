@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize release release-dry-run
+.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize release release-dry-run live-ax-test
 
 build:
 	swift build
@@ -48,3 +48,8 @@ release:
 
 release-dry-run:
 	scripts/publish-release.sh --dry-run
+
+# LOCAL ONLY: live Accessibility self-test against TextEdit. Skips (exit 0)
+# unless FLOTILE_LIVE_AX_TESTS=1. Not a dependency of any other target; never CI.
+live-ax-test:
+	scripts/live-ax-test.sh
