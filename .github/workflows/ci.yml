@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'epic/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # macos-26 image ships Xcode 26.6 (newest listed in the runner-images README).
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+
+      - name: Install xcodegen
+        run: which xcodegen || brew install xcodegen
+
+      - name: Unit tests
+        run: make test
+
+      - name: Coverage gate
+        run: |
+          mkdir -p build
+          COVERAGE_REPORT_PATH=build/coverage.txt make coverage
+
+      - name: Generate Xcode project
+        run: make xcodeproj
+
+      - name: Build app
+        run: make app-build
+
+      - name: App tests
+        run: make app-test-ci
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build/coverage.txt
+          if-no-files-found: error

@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg notarize release release-dry-run live-ax-test
+.PHONY: build test coverage clean xcodeproj app-build app-test app-test-ci icon release-build dmg notarize release release-dry-run live-ax-test
 
 build:
 	swift build
@@ -28,6 +28,11 @@ app-build: xcodeproj
 app-test: xcodeproj
 	xcodebuild test -project FloTile.xcodeproj -scheme FloTile -destination 'platform=macOS' \
 		-derivedDataPath .build/xcode
+
+# CI variant of app-test: ad-hoc signed, no certificate or team required.
+app-test-ci: xcodeproj
+	xcodebuild test -project FloTile.xcodeproj -scheme FloTile -destination 'platform=macOS' \
+		-derivedDataPath .build/xcode CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGNING_REQUIRED=NO
 
 icon:
 	scripts/generate-icon.sh
