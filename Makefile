@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test icon
+.PHONY: build test coverage clean xcodeproj app-build app-test icon release-build dmg
 
 build:
 	swift build
@@ -11,7 +11,7 @@ coverage:
 
 clean:
 	swift package clean
-	rm -rf .build
+	rm -rf .build build
 
 xcodeproj:
 	xcodegen generate --spec project.yml
@@ -31,3 +31,9 @@ app-test: xcodeproj
 
 icon:
 	scripts/generate-icon.sh
+
+release-build:
+	scripts/build-app.sh
+
+dmg:
+	scripts/make-dmg.sh
