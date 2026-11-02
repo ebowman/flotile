@@ -75,7 +75,8 @@ make release       # see docs/RELEASING.md (release-dry-run first)
 - `FloTileCore` (Package.swift, `Sources/FloTileCore`) holds the pure logic: grid/tiling math, window models, the updater. Foundation, CoreGraphics and CryptoKit only.
 - The app target `FloTile` (`project.yml`, `App/Sources`) is the AppKit shell: status item, menu, Settings, Accessibility.
 - Core talks to the system through protocols; the app supplies real adapters, tests supply fakes.
-- Plain click tiles the frontmost app's standard windows on the clicked display; option/right/control-click opens the menu.
+- Plain click tiles the frontmost app's standard windows on the clicked display, or undoes the last tiling when nothing has changed since (guarded toggle; the menu also has Undo Tiling); option/right/control-click opens the menu.
+- `TileSession` keeps one snapshot per app and turns a second click into undo when nothing changed; WindowIDs are kept stable across enumerations by `StableHandleRegistry` in the Accessibility adapter.
 - The updater fetches `appcast.json` from GitHub Releases and verifies SHA-256 and notarization before installing; manual only.
 - The app is not sandboxed (Accessibility requires it), so distribution is Developer ID, not the Mac App Store.
 - Release pipeline in `scripts/`: build-app, make-dmg, notarize-dmg, publish-release (see `docs/RELEASING.md`).

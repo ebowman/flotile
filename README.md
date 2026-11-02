@@ -6,8 +6,11 @@ FlöTile is a macOS menu bar app that tiles the front app's windows into a tidy 
 
 ## What it does
 
-A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. Option-click, right-click or control-click opens a menu with three items:
+A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. A second plain click restores the previous layout, but only if the same app is still frontmost on the same display, the same windows exist and none has moved or resized since the tiling; otherwise the click tiles again. Undo is single level.
 
+Option-click, right-click or control-click opens a menu with these items, in order:
+
+- **Undo Tiling** (enabled only when an undo is currently valid)
 - **Settings…** (one toggle: Open at Login)
 - **Check for Updates…**
 - **Quit FlöTile**
