@@ -33,6 +33,9 @@
 # re-read via System Events after the undo equal the recorded originals (2 pt, no
 # coordinate conversion), and that the Fonts panel never moved. Then it cleans up.
 #
+# The self-test refuses to run unless TextEdit is frontmost
+# (--self-test-expect-bundle com.apple.TextEdit); the JSON reports the app it hit.
+#
 # Fails closed: if TextEdit cannot be queried (Automation permission denied,
 # TextEdit not responding, osascript error) the script aborts with a clear
 # message instead of assuming TextEdit has no documents.
@@ -105,6 +108,12 @@ fi
 CREATED_DOCS=()
 PANEL_OPENED=0
 SELF_TEST_PID=""
+
+# Prints TextEdit's window names and subroles to help diagnose a failed run.
+dump_textedit_windows() {
+  echo "TextEdit windows (name, subrole):"
+  osascript -e 'tell application "System Events" to tell process "TextEdit" to get {name, subrole} of every window' || true
+}
 
 # Run the Debug FloTile in the background so cleanup can kill exactly this pid
 # if the script is interrupted. Usage: run_self_test <outfile> <args...>
@@ -269,14 +278,14 @@ osascript -e 'tell application "System Events" to tell process "TextEdit" to set
 # The Fonts panel may hold focus; the app is still TextEdit, which is what matters.
 sleep 0.5
 
-run_self_test "$OUT" --self-test-tile || { echo "self-test exited non-zero:"; cat "$OUT"; exit 1; }
+run_self_test "$OUT" --self-test-expect-bundle com.apple.TextEdit --self-test-tile || { echo "self-test exited non-zero:"; cat "$OUT"; dump_textedit_windows; exit 1; }
 sleep 0.5
 ensure_panel_visible || exit 1
 AFTER="$(panel_pos)" || exit 1
 echo "Fonts panel position after:  $AFTER"
 echo "Self-test JSON: $(cat "$OUT")"
 
-python3 -I - "$OUT" "$BEFORE" "$AFTER" <<'PY'
+python3 -I - "$OUT" "$BEFORE" "$AFTER" <<'PY' || { dump_textedit_windows; exit 1; }
 import json, sys
 raw = open(sys.argv[1]).read()
 before, after = sys.argv[2], sys.argv[3]
@@ -289,6 +298,7 @@ try:
 except Exception as e:
     fail("invalid JSON: %s" % e)
 if "error" in d: fail("self-test reported error")
+if d.get("app") != "com.apple.TextEdit": fail("app != com.apple.TextEdit")
 if d["outcome"] != "tiled:2": fail("outcome != tiled:2")
 fr = d["frames"]; s = d["screen"]
 if len(fr) != 2: fail("expected exactly 2 frames")
@@ -330,7 +340,7 @@ PANEL_BEFORE_UNDO="$(panel_pos)" || exit 1
 osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
 sleep 0.5
 UNDO_OUT="build/live-ax-undo.json"
-run_self_test "$UNDO_OUT" --self-test-tile-undo || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; exit 1; }
+run_self_test "$UNDO_OUT" --self-test-expect-bundle com.apple.TextEdit --self-test-tile-undo || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; dump_textedit_windows; exit 1; }
 sleep 0.5
 AFTER_A="$(doc_geom "$DOC_A")"; AFTER_B="$(doc_geom "$DOC_B")"
 ensure_panel_visible || exit 1
@@ -338,7 +348,7 @@ PANEL_AFTER_UNDO="$(panel_pos)" || exit 1
 echo "Undo self-test JSON: $(cat "$UNDO_OUT")"
 echo "After undo: $DOC_A=$AFTER_A $DOC_B=$AFTER_B"
 
-python3 -I - "$UNDO_OUT" "$ORIG_A" "$AFTER_A" "$ORIG_B" "$AFTER_B" "$BEFORE" "$PANEL_BEFORE_UNDO" "$PANEL_AFTER_UNDO" <<'PY'
+python3 -I - "$UNDO_OUT" "$ORIG_A" "$AFTER_A" "$ORIG_B" "$AFTER_B" "$BEFORE" "$PANEL_BEFORE_UNDO" "$PANEL_AFTER_UNDO" <<'PY' || { dump_textedit_windows; exit 1; }
 import json, sys
 raw = open(sys.argv[1]).read()
 def fail(msg):
@@ -351,6 +361,7 @@ try:
 except Exception as e:
     fail("invalid JSON: %s" % e)
 if "error" in d: fail("undo self-test reported error")
+if d.get("app") != "com.apple.TextEdit": fail("app != com.apple.TextEdit")
 if d["first"]["outcome"] != "tiled:2": fail("first.outcome != tiled:2")
 if d["second"]["outcome"] != "restored:2": fail("second.outcome != restored:2")
 if len(d["second"]["frames"]) != 2: fail("expected 2 restored frames")

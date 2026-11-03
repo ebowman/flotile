@@ -95,6 +95,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
+    /// Bundle id the self-test must find frontmost (`--self-test-expect-bundle <id>`), if given.
+    private static func expectedSelfTestBundle() -> String? {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--self-test-expect-bundle"), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
+
+    private static func frontmostSelfTestApp() -> (pid: pid_t, bundle: String)? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        return (app.processIdentifier, app.bundleIdentifier ?? "unknown")
+    }
+
+    /// Fails closed: the frontmost app, or exits 1 with an error JSON when none
+    /// exists or it is not the expected bundle. Called before anything is tiled.
+    private static func requireSelfTestApp(_ finish: (String, Int32) -> Never) -> (pid: pid_t, bundle: String) {
+        guard let front = frontmostSelfTestApp() else {
+            finish(SelfTestReport.errorJSON("no frontmost application"), 1)
+        }
+        if let expected = expectedSelfTestBundle(), expected != front.bundle {
+            finish(SelfTestReport.errorJSON(
+                "frontmost app is \(front.bundle) (pid \(front.pid)), expected \(expected); nothing was tiled"), 1)
+        }
+        return front
+    }
+
     /// Live Accessibility self-test (see scripts/live-ax-test.sh): tiles the
     /// frontmost app on the screen under the mouse, re-reads the windows and
     /// prints one JSON line, then exits.
@@ -109,19 +134,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let windowSystem = AXWindowSystem()
         let coordinator = TileCoordinator(windowSystem: windowSystem)
-        // Capture the pid BEFORE tiling so the re-read targets the same app.
-        let pid = windowSystem.frontmostApplicationPID()
+        // Guard and capture the frontmost app BEFORE tiling; the re-read reuses its pid.
+        let front = requireSelfTestApp { finish($0, code: $1) }
+        let pid = front.pid
         let outcome = coordinator.tile(on: screen)
         var frames: [CGRect] = []
         var ignored: [CGRect] = []
-        if let pid {
-            do {
-                (frames, ignored) = try rereadWindows(windowSystem, pid: pid, on: screen)
-            } catch {
-                finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
-            }
+        do {
+            (frames, ignored) = try rereadWindows(windowSystem, pid: pid, on: screen)
+        } catch {
+            finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
         }
-        finish(SelfTestReport.json(outcome: outcome.selfTestLabel, screen: screen.visibleFrame,
+        finish(SelfTestReport.json(app: front.bundle, outcome: outcome.selfTestLabel, screen: screen.visibleFrame,
                                    frames: frames, ignored: ignored), code: 0)
     }
 
@@ -148,9 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowSystem = AXWindowSystem()
         let coordinator = TileCoordinator(windowSystem: windowSystem)
         let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
-        guard let pid = windowSystem.frontmostApplicationPID() else {
-            finish(SelfTestReport.errorJSON("no frontmost application"), code: 1)
-        }
+        let front = requireSelfTestApp { finish($0, code: $1) }
+        let pid = front.pid
         let outcome1 = session.handleClick(on: screen)
         let frames1: [CGRect]
         do { frames1 = try rereadWindows(windowSystem, pid: pid, on: screen).frames } catch {
@@ -164,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             finish(SelfTestReport.undoJSON(first: (outcome1.selfTestLabel, frames1),
                                            second: (outcome2.selfTestLabel, frames2),
-                                           screen: screen.visibleFrame), code: 0)
+                                           screen: screen.visibleFrame, app: front.bundle), code: 0)
         }
     }
     #endif
