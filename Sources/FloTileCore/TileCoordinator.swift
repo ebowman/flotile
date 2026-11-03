@@ -93,6 +93,49 @@ public struct TileCoordinator: Sendable {
         return (outcome, snapshot)
     }
 
+    /// Gives every window in `snapshot.after` the display's visible frame (inset to integral
+    /// edges) and returns a `.maximized` snapshot whose `before` is unchanged, so a later
+    /// `restore` returns windows to their original frames.
+    ///
+    /// Stacking order is untouched because only position/size are written via `setFrame`;
+    /// nothing is raised, focused or activated. Performs no trust check (same contract as
+    /// `restore`; the session checks trust). The snapshot is nil when nothing succeeded or
+    /// no window could be recorded. `after` is re-read for every previously tiled window
+    /// still present (even ones whose maximize failed, so they are still restored); if the
+    /// re-read throws, old frames are used with succeeded ids replaced by the fill frame.
+    public func maximizeAndSnapshot(_ snapshot: TileSnapshot, on screen: ScreenInfo)
+        -> (outcome: TileOutcome, snapshot: TileSnapshot?) {
+        if snapshot.after.isEmpty { return (.noWindows, nil) }
+        let fill = TilingLayout.insetIntegral(screen.visibleFrame)
+        var movedIDs: Set<WindowID> = []
+        var failed = 0
+        for id in snapshot.after.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            do {
+                try windowSystem.setFrame(fill, of: id)
+                movedIDs.insert(id)
+            } catch {
+                failed += 1
+            }
+        }
+        let succeeded = movedIDs.count
+        let outcome: TileOutcome = failed == 0
+            ? .maximized(count: succeeded) : .partial(succeeded: succeeded, failed: failed)
+        if succeeded == 0 { return (outcome, nil) }
+
+        var newAfter: [WindowID: CGRect] = [:]
+        if let reread = try? windowSystem.windows(forApplication: snapshot.pid) {
+            for window in reread where snapshot.after[window.id] != nil {
+                newAfter[window.id] = window.frame
+            }
+        } else {
+            newAfter = snapshot.after
+            for id in movedIDs { newAfter[id] = fill }
+        }
+        if newAfter.isEmpty { return (outcome, nil) }
+        return (outcome, TileSnapshot(pid: snapshot.pid, screenID: snapshot.screenID, before: snapshot.before,
+                                      after: newAfter, takenAt: now(), phase: .maximized))
+    }
+
     /// Moves every window in `snapshot.after` (the windows tiling moved) back to its
     /// recorded `before` frame; windows that failed to move are left alone and not counted.
     /// Performs no trust check: callers decide (the session checks trust via

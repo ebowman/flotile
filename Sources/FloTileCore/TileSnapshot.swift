@@ -7,20 +7,31 @@ public struct TileSnapshot: Equatable, Sendable {
     public let pid: pid_t
     /// Screen the windows were tiled on.
     public let screenID: ScreenID
-    /// Frames of the eligible windows prior to tiling. Undo restores the `before` frames of the windows present in `after` (the ones the tiling moved).
+    /// Which step of the click cycle this snapshot is at.
+    public enum Phase: Equatable, Sendable {
+        /// Windows were tiled into the grid.
+        case tiled
+        /// Windows were given the display's visible frame.
+        case maximized
+    }
+
+    /// Frames of the eligible windows prior to tiling (the original pre-tile frames). Undo restores the `before` frames of the windows present in `after` (the ones the tiling moved).
     public let before: [WindowID: CGRect]
-    /// Frames observed AFTER tiling, re-read from the system (not the requested
+    /// Frames observed AFTER the most recent step (post-tile or post-maximize), re-read from the system (not the requested
     /// frames), because some apps clamp sizes.
     public let after: [WindowID: CGRect]
     /// When the snapshot was taken.
     public let takenAt: Date
+    /// Step of the click cycle this snapshot records.
+    public let phase: Phase
 
     /// Creates a snapshot.
-    public init(pid: pid_t, screenID: ScreenID, before: [WindowID: CGRect], after: [WindowID: CGRect], takenAt: Date) {
+    public init(pid: pid_t, screenID: ScreenID, before: [WindowID: CGRect], after: [WindowID: CGRect], takenAt: Date, phase: Phase = .tiled) {
         self.pid = pid
         self.screenID = screenID
         self.before = before
         self.after = after
         self.takenAt = takenAt
+        self.phase = phase
     }
 }

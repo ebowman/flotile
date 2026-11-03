@@ -14,6 +14,8 @@ public enum TileOutcome: Equatable, Sendable {
     case partial(succeeded: Int, failed: Int)
     /// Every window of a snapshot was moved back to its pre-tile frame.
     case restored(count: Int)
+    /// Every window of a tiled snapshot was given the display's visible frame.
+    case maximized(count: Int)
     /// An explicit undo was requested but no valid snapshot exists; silent.
     case nothingToUndo
     /// Windows could not be enumerated; `reason` describes the error.

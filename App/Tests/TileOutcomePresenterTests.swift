@@ -16,7 +16,7 @@ final class TileOutcomePresenterTests: XCTestCase {
     }
 
     func testSilentOutcomes() {
-        for outcome in [TileOutcome.tiled(count: 3), .noWindows, .noFrontmostApp, .restored(count: 2), .nothingToUndo] {
+        for outcome in [TileOutcome.tiled(count: 3), .noWindows, .noFrontmostApp, .restored(count: 2), .maximized(count: 2), .nothingToUndo] {
             let (p, r) = make()
             p.present(outcome)
             XCTAssertTrue(r.logs.isEmpty)
@@ -30,6 +30,12 @@ final class TileOutcomePresenterTests: XCTestCase {
         XCTAssertEqual(r.logs.count, 1)
         XCTAssertEqual(r.logs[0], "Tiled 4 window(s); 2 could not be moved")
         XCTAssertEqual(r.permissionCalls, 0)
+    }
+
+    func testPartialWhileMaximizingUsesMaximizedWording() {
+        let (p, r) = make()
+        p.present(.partial(succeeded: 1, failed: 1), context: .maximizing)
+        XCTAssertEqual(r.logs, ["Maximized 1 window(s); 1 could not be moved"])
     }
 
     func testPartialAfterRestoreUsesRestoredWording() {
@@ -67,6 +73,7 @@ final class TileOutcomePresenterTests: XCTestCase {
         XCTAssertTrue(TileOutcomePresenter.isSilent(.tiled(count: 1)))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.noWindows))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.noFrontmostApp))
+        XCTAssertTrue(TileOutcomePresenter.isSilent(.maximized(count: 2)))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.restored(count: 1)))
         XCTAssertTrue(TileOutcomePresenter.isSilent(.nothingToUndo))
         XCTAssertFalse(TileOutcomePresenter.isSilent(.partial(succeeded: 1, failed: 1)))
