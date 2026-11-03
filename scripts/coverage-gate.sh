@@ -8,8 +8,8 @@
 # compares TOTAL line coverage with the threshold.
 #
 # Environment:
-#   COVERAGE_MIN          Minimum TOTAL line coverage percent (integer or decimal,
-#                         default 90). Raise it for a permanent change by editing the
+#   COVERAGE_MIN          Minimum TOTAL line coverage percent (integer or decimal
+#                         in 0-100 inclusive, default 90; anything else exits 2). Raise it for a permanent change by editing the
 #                         default below (DEFAULT_MIN) or by setting it in CI.
 #   COVERAGE_REPORT_PATH  If set, the full table and verdict are also written there.
 #
@@ -17,11 +17,15 @@
 # Missed Functions, Executed, Lines, Missed Lines, Cover, Branches, ... The gate
 # uses the line "Cover" column (Lines / Missed Lines / Cover) of the TOTAL row.
 #
-# Exit codes: 0 pass, 1 below threshold, 2 profile data or test binary not found.
+# Exit codes: 0 pass, 1 below threshold, 2 invalid COVERAGE_MIN, or profile data or test binary not found.
 set -euo pipefail
 
 DEFAULT_MIN=90
 MIN="${COVERAGE_MIN:-$DEFAULT_MIN}"
+if ! [[ "$MIN" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! awk -v m="$MIN" 'BEGIN{exit !(m+0 >= 0 && m+0 <= 100)}'; then
+  echo "error: COVERAGE_MIN must be a number between 0 and 100 (got '$MIN')" >&2
+  exit 2
+fi
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
 cd "$ROOT"
 

@@ -1,4 +1,4 @@
-.PHONY: build test coverage clean xcodeproj app-build app-test app-test-ci icon release-build dmg notarize release release-dry-run live-ax-test
+.PHONY: build test coverage clean xcodeproj app-build app-test app-test-ci icon release-build dmg notarize release release-dry-run live-ax-test scripts-test
 
 build:
 	swift build
@@ -8,6 +8,9 @@ test:
 
 coverage:
 	scripts/coverage-gate.sh
+
+scripts-test:
+	scripts/test-coverage-gate.sh
 
 clean:
 	swift package clean
