@@ -34,6 +34,26 @@ enum SelfTestReport {
         return serialize(object)
     }
 
+    typealias Phase = (outcome: String, frames: [CGRect], order: [Int])
+
+    /// Three-phase report for `--self-test-tile-cycle`: tile, maximize, restore.
+    /// `order` is the on-screen window numbers, front to back.
+    static func cycleJSON(first: Phase, second: Phase, third: Phase,
+                          screen: CGRect, app: String) -> String {
+        func phase(_ p: Phase) -> [String: Any] {
+            ["outcome": p.outcome, "frames": p.frames.map(array), "order": p.order]
+        }
+        let object: [String: Any] = [
+            "app": app,
+            "first": phase(first),
+            "second": phase(second),
+            "third": phase(third),
+            "screen": ["x": number(screen.minX), "y": number(screen.minY),
+                       "w": number(screen.width), "h": number(screen.height)],
+        ]
+        return serialize(object)
+    }
+
     static func errorJSON(_ description: String) -> String {
         serialize(["error": description])
     }

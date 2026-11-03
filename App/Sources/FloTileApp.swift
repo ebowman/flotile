@@ -34,6 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { Self.runUndoSelfTest() }
             return
         }
+        if CommandLine.arguments.contains("--self-test-tile-cycle") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { Self.runCycleSelfTest() }
+            return
+        }
         #endif
 
         let model = SettingsModel(loginItems: SMAppServiceLoginItem())
@@ -198,6 +202,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             finish(SelfTestReport.undoJSON(first: (outcome1.selfTestLabel, frames1),
                                            second: (outcome2.selfTestLabel, frames2),
                                            screen: screen.visibleFrame, app: front.bundle), code: 0)
+        }
+    }
+
+    /// On-screen normal-layer window numbers of `pid`, front to back.
+    private static func windowOrder(pid: pid_t) -> [Int] {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                              kCGNullWindowID) as? [[String: Any]] ?? []
+        return list.compactMap { info in
+            guard (info[kCGWindowOwnerPID as String] as? Int).map({ pid_t($0) }) == pid,
+                  (info[kCGWindowLayer as String] as? Int) == 0,
+                  let number = info[kCGWindowNumber as String] as? Int else { return nil }
+            return number
+        }
+    }
+
+    /// Live cycle self-test: click, 1 s, click, 1 s, click (tile, maximize, restore);
+    /// prints one JSON line.
+    private static func runCycleSelfTest() {
+        func finish(_ line: String, code: Int32) -> Never {
+            print(line)
+            fflush(stdout)
+            exit(code)
+        }
+        guard let screen = AppKitScreenProvider.targetScreen(forStatusButton: nil) else {
+            finish(SelfTestReport.errorJSON("no screen available"), code: 1)
+        }
+        let windowSystem = AXWindowSystem()
+        let coordinator = TileCoordinator(windowSystem: windowSystem)
+        let session = TileSession(coordinator: coordinator, windowSystem: windowSystem,
+                                  maximizeOnSecondClick: { true })
+        let front = requireSelfTestApp { finish($0, code: $1) }
+        let pid = front.pid
+        func step() -> SelfTestReport.Phase {
+            let outcome = session.handleClick(on: screen)
+            do {
+                let frames = try rereadWindows(windowSystem, pid: pid, on: screen).frames
+                return (outcome.selfTestLabel, frames, windowOrder(pid: pid))
+            } catch {
+                finish(SelfTestReport.errorJSON(String(describing: error)), code: 1)
+            }
+        }
+        let first = step()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let second = step()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                let third = step()
+                finish(SelfTestReport.cycleJSON(first: first, second: second, third: third,
+                                                screen: screen.visibleFrame, app: front.bundle), code: 0)
+            }
         }
     }
     #endif

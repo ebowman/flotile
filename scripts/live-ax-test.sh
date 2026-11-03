@@ -31,7 +31,11 @@
 # click) and asserts first.outcome == tiled:2, second.outcome == restored:2, the
 # restored sizes/x match the recorded originals (2 pt) and the documents' positions
 # re-read via System Events after the undo equal the recorded originals (2 pt, no
-# coordinate conversion), and that the Fonts panel never moved. Then it cleans up.
+# coordinate conversion), and that the Fonts panel never moved. A third run,
+# `--self-test-tile-cycle` (click, 1 s, click, 1 s, click), asserts tiled:2 ->
+# maximized:2 (both frames equal to the visible frame and the CGWindowList stacking
+# order unchanged) -> restored:2 back to the recorded originals; Fonts panel
+# unchanged. Then it cleans up.
 #
 # The self-test refuses to run unless TextEdit is frontmost
 # (--self-test-expect-bundle com.apple.TextEdit); the JSON reports the app it hit.
@@ -376,5 +380,62 @@ got = sorted((f[0], f[2], f[3]) for f in d["second"]["frames"])
 for w, g in zip(want, got):
     if any(abs(x - y) > 2 for x, y in zip(w, g)): fail("second.frames x/size differ from originals: %s vs %s" % (want, got))
 if not (sys.argv[6] == sys.argv[7] == sys.argv[8]): fail("Fonts panel moved: %s / %s / %s" % tuple(sys.argv[6:9]))
+print("live-ax-test: undo assertions OK")
+PY
+
+ensure_panel_visible || exit 1
+PANEL_BEFORE_CYCLE="$(panel_pos)" || exit 1
+CYC_ORIG_A="$(doc_geom "$DOC_A")"; CYC_ORIG_B="$(doc_geom "$DOC_B")"
+echo "Cycle originals: $DOC_A=$CYC_ORIG_A $DOC_B=$CYC_ORIG_B"
+
+osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
+sleep 0.5
+CYCLE_OUT="build/live-ax-cycle.json"
+run_self_test "$CYCLE_OUT" --self-test-expect-bundle com.apple.TextEdit --self-test-tile-cycle || { echo "cycle self-test exited non-zero:"; cat "$CYCLE_OUT"; dump_textedit_windows; exit 1; }
+sleep 0.5
+CYC_AFTER_A="$(doc_geom "$DOC_A")"; CYC_AFTER_B="$(doc_geom "$DOC_B")"
+ensure_panel_visible || exit 1
+PANEL_AFTER_CYCLE="$(panel_pos)" || exit 1
+echo "Cycle self-test JSON: $(cat "$CYCLE_OUT")"
+echo "After cycle: $DOC_A=$CYC_AFTER_A $DOC_B=$CYC_AFTER_B"
+
+python3 -I - "$CYCLE_OUT" "$CYC_ORIG_A" "$CYC_AFTER_A" "$CYC_ORIG_B" "$CYC_AFTER_B" "$BEFORE" "$PANEL_BEFORE_CYCLE" "$PANEL_AFTER_CYCLE" <<'PY' || { dump_textedit_windows; exit 1; }
+import json, sys
+raw = open(sys.argv[1]).read()
+def fail(msg):
+    print("ASSERTION FAILED: " + msg, file=sys.stderr)
+    print(raw, file=sys.stderr)
+    sys.exit(1)
+def geom(t): return [float(v) for v in t.split(",")]
+try:
+    d = json.loads(raw)
+except Exception as e:
+    fail("invalid JSON: %s" % e)
+if "error" in d: fail("cycle self-test reported error")
+if d.get("app") != "com.apple.TextEdit": fail("app != com.apple.TextEdit")
+if d["first"]["outcome"] != "tiled:2": fail("first.outcome != tiled:2")
+if d["second"]["outcome"] != "maximized:2": fail("second.outcome != maximized:2")
+if d["third"]["outcome"] != "restored:2": fail("third.outcome != restored:2")
+if len(d["second"]["frames"]) != 2: fail("expected 2 maximized frames")
+s = d["screen"]
+screen = [float(s["x"]), float(s["y"]), float(s["w"]), float(s["h"])]
+for f in d["second"]["frames"]:
+    if any(abs(x - y) > 2 for x, y in zip(f, screen)):
+        fail("maximized frame %s != screen %s" % (f, screen))
+if len(d["first"]["order"]) != 2: fail("expected 2 windows in first.order")
+if d["second"]["order"] != d["first"]["order"]: fail("z-order changed on maximize: %s -> %s" % (d["first"]["order"], d["second"]["order"]))
+if d["third"]["order"] != d["first"]["order"]: fail("z-order changed on restore: %s -> %s" % (d["first"]["order"], d["third"]["order"]))
+if len(d["third"]["frames"]) != 2: fail("expected 2 restored frames")
+origs = [geom(sys.argv[2]), geom(sys.argv[4])]
+afters = [geom(sys.argv[3]), geom(sys.argv[5])]
+for o, a in zip(origs, afters):
+    if any(abs(x - y) > 2 for x, y in zip(o, a)):
+        fail("document not restored to original: %s -> %s" % (o, a))
+want = sorted((o[0], o[2], o[3]) for o in origs)
+got = sorted((f[0], f[2], f[3]) for f in d["third"]["frames"])
+for w, g in zip(want, got):
+    if any(abs(x - y) > 2 for x, y in zip(w, g)): fail("third.frames x/size differ from originals: %s vs %s" % (want, got))
+if not (sys.argv[6] == sys.argv[7] == sys.argv[8]): fail("Fonts panel moved: %s / %s / %s" % tuple(sys.argv[6:9]))
+print("live-ax-test: cycle assertions OK")
 print("live-ax-test: PASS")
 PY

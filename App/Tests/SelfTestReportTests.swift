@@ -47,4 +47,30 @@ final class SelfTestReportTests: XCTestCase {
         XCTAssertTrue(json.contains("\"first\":{\"frames\":[],\"outcome\":\"noWindows\"}"), json)
         XCTAssertTrue(json.contains("\"w\":10.5"), json)
     }
+
+    func testCycleJSONShapeAndOrder() {
+        let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
+        let json = SelfTestReport.cycleJSON(
+            first: ("tiled:2", [CGRect(x: 0, y: 25, width: 720, height: 875)], [42, 7]),
+            second: ("maximized:2", [screen], [42, 7]),
+            third: ("restored:2", [CGRect(x: 120, y: 140, width: 600, height: 400)], [42, 7]),
+            screen: screen, app: "com.apple.TextEdit")
+        XCTAssertEqual(json, """
+        {"app":"com.apple.TextEdit",\
+        "first":{"frames":[[0,25,720,875]],"order":[42,7],"outcome":"tiled:2"},\
+        "screen":{"h":875,"w":1440,"x":0,"y":25},\
+        "second":{"frames":[[0,25,1440,875]],"order":[42,7],"outcome":"maximized:2"},\
+        "third":{"frames":[[120,140,600,400]],"order":[42,7],"outcome":"restored:2"}}
+        """)
+        XCTAssertFalse(json.contains("\n"))
+    }
+
+    func testCycleJSONEmptyOrderAllowed() {
+        let json = SelfTestReport.cycleJSON(
+            first: ("noWindows", [], []), second: ("noWindows", [], []), third: ("noWindows", [], []),
+            screen: CGRect(x: 0, y: 0, width: 10.5, height: 20), app: "x.y")
+        XCTAssertTrue(json.contains("\"first\":{\"frames\":[],\"order\":[],\"outcome\":\"noWindows\"}"), json)
+        XCTAssertTrue(json.contains("\"third\":{\"frames\":[],\"order\":[],\"outcome\":\"noWindows\"}"), json)
+        XCTAssertTrue(json.contains("\"w\":10.5"), json)
+    }
 }
