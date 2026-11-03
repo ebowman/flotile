@@ -27,7 +27,37 @@
 # restored sizes/x match the recorded originals (2 pt) and the documents' positions
 # re-read via System Events after the undo equal the recorded originals (2 pt, no
 # coordinate conversion), and that the Fonts panel never moved. Then it cleans up.
+#
+# Fails closed: if TextEdit cannot be queried (Automation permission denied,
+# TextEdit not responding, osascript error) the script aborts with a clear
+# message instead of assuming TextEdit has no documents.
 set -euo pipefail
+
+# te_query <description> <applescript line>...
+# Runs the AppleScript lines via osascript inside a 10 s timeout block (so a hung
+# TextEdit cannot block forever) and prints the trimmed stdout. On any osascript
+# failure prints a specific message to stderr and exits 1. Call it as
+#   out="$(te_query ...)" || exit 1
+# because exit inside $(...) only ends the subshell.
+te_query() {
+  local desc="$1"; shift
+  local args=(-e 'with timeout of 10 seconds') line out errfile err rc=0
+  for line in "$@"; do args+=(-e "$line"); done
+  args+=(-e 'end timeout')
+  errfile="$(mktemp)"
+  out="$(osascript "${args[@]}" 2>"$errfile")" || rc=$?
+  if [[ "$rc" != "0" ]]; then
+    err="$(head -n 1 "$errfile")"
+    rm -f "$errfile"
+    echo "live-ax-test: $desc failed (osascript exit $rc): $err" >&2
+    echo "If this is an Automation permission problem, allow your terminal to control TextEdit and System Events in System Settings > Privacy & Security, then rerun." >&2
+    exit 1
+  fi
+  rm -f "$errfile"
+  out="${out#"${out%%[![:space:]]*}"}"
+  out="${out%"${out##*[![:space:]]}"}"
+  printf '%s\n' "$out"
+}
 
 if [[ "${FLOTILE_LIVE_AX_TESTS:-}" != "1" ]]; then
   echo "skipped: set FLOTILE_LIVE_AX_TESTS=1 to run the live Accessibility self-test"
@@ -41,8 +71,21 @@ APP=".build/xcode/Build/Products/Debug/FloTile.app"
 OUT="build/live-ax-test.json"
 mkdir -p build
 
-if osascript -e 'tell application "TextEdit" to (it is running) and ((count of documents) > 0)' 2>/dev/null | grep -q true; then
+TE_DOCS="$(te_query "TextEdit document-count query" \
+  'tell application "TextEdit"' \
+  'if it is running then' \
+  'return count of documents' \
+  'else' \
+  'return -1' \
+  'end if' \
+  'end tell')" || exit 1
+if [[ "$TE_DOCS" == "-1" || "$TE_DOCS" == "0" ]]; then
+  :
+elif [[ "$TE_DOCS" =~ ^[1-9][0-9]*$ ]]; then
   echo "TextEdit already has documents open; quit it first (they would be closed without saving)." >&2
+  exit 1
+else
+  echo "live-ax-test: unexpected TextEdit response: '$TE_DOCS'" >&2
   exit 1
 fi
 
@@ -109,8 +152,10 @@ xcodebuild -project FloTile.xcodeproj -scheme FloTile -configuration Debug \
 osascript -e 'tell application "TextEdit" to activate' -e 'delay 1'
 # State restoration guard: TextEdit may have reopened documents on launch. Refuse
 # before creating anything (CREATED_DOCS is still empty, so cleanup closes nothing).
-if ! DOC_COUNT="$(osascript -e 'tell application "TextEdit" to count of documents' 2>/dev/null)" || [[ "$DOC_COUNT" != "0" ]]; then
-  echo "TextEdit reopened ${DOC_COUNT:-an unknown number of} document(s) via state restoration (or the count query failed); close them and rerun." >&2
+DOC_COUNT="$(te_query "TextEdit post-launch document-count query" \
+  'tell application "TextEdit" to return count of documents')" || exit 1
+if [[ "$DOC_COUNT" != "0" ]]; then
+  echo "TextEdit reopened ${DOC_COUNT:-an unknown number of} document(s) via state restoration; close them and rerun." >&2
   exit 1
 fi
 osascript <<'OSA'
