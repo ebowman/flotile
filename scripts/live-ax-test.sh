@@ -422,7 +422,7 @@ screen = [float(s["x"]), float(s["y"]), float(s["w"]), float(s["h"])]
 for f in d["second"]["frames"]:
     if any(abs(x - y) > 2 for x, y in zip(f, screen)):
         fail("maximized frame %s != screen %s" % (f, screen))
-if len(d["first"]["order"]) != 2: fail("expected 2 windows in first.order")
+if len(d["first"]["order"]) < 2: fail("expected at least 2 windows in first.order (the two documents; extra TextEdit windows such as the Fonts panel are allowed): %s" % d["first"]["order"])
 if d["second"]["order"] != d["first"]["order"]: fail("z-order changed on maximize: %s -> %s" % (d["first"]["order"], d["second"]["order"]))
 if d["third"]["order"] != d["first"]["order"]: fail("z-order changed on restore: %s -> %s" % (d["first"]["order"], d["third"]["order"]))
 if len(d["third"]["frames"]) != 2: fail("expected 2 restored frames")
