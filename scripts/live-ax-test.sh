@@ -10,7 +10,12 @@
 #   - The invoking shell/terminal must be allowed to control "System Events"
 #     (Automation + Accessibility) because TextEdit is driven via osascript.
 #   - TextEdit must NOT already have documents open (they would be closed
-#     without saving); the script refuses to run in that case.
+#     without saving); the script refuses to run in that case. It also refuses
+#     if TextEdit still shows documents right after launch (macOS state
+#     restoration): the count must be 0 before the script creates its own.
+#   - No other FloTile process may be running (e.g. the installed
+#     /Applications/FloTile.app): UI scripting would be ambiguous and the
+#     cleanup must never kill a FloTile it did not launch. Quit it first.
 #
 # What it does: builds a signed Debug app, makes TextEdit show exactly two
 # untitled documents plus the Fonts panel (a non-standard window), runs
@@ -41,8 +46,30 @@ if osascript -e 'tell application "TextEdit" to (it is running) and ((count of d
   exit 1
 fi
 
+# Never run alongside another FloTile: UI scripting would be ambiguous and we
+# must never kill a process we did not launch.
+if FT_PIDS="$(pgrep -x FloTile 2>/dev/null)" && [[ -n "$FT_PIDS" ]]; then
+  echo "FloTile is already running (pid(s): $(echo "$FT_PIDS" | tr '\n' ' ')). Quit the installed/other FloTile first;" >&2
+  echo "the live test would be ambiguous and cleanup never kills a FloTile it did not launch." >&2
+  exit 1
+fi
+
 CREATED_DOCS=()
 PANEL_OPENED=0
+SELF_TEST_PID=""
+
+# Run the Debug FloTile in the background so cleanup can kill exactly this pid
+# if the script is interrupted. Usage: run_self_test <outfile> <args...>
+# Returns the child's exit code (set -e safe).
+run_self_test() {
+  local outfile="$1"; shift
+  local rc=0
+  "$APP/Contents/MacOS/FloTile" "$@" >"$outfile" &
+  SELF_TEST_PID=$!
+  wait "$SELF_TEST_PID" || rc=$?
+  SELF_TEST_PID=""
+  return "$rc"
+}
 cleanup() {
   # Close the Fonts panel only if this script opened it, and close only the
   # documents this script created (by name). Never "every document".
@@ -64,7 +91,11 @@ OSA
   for name in ${CREATED_DOCS[@]+"${CREATED_DOCS[@]}"}; do
     osascript >/dev/null 2>&1 -e "tell application \"TextEdit\" to if (exists document \"$name\") then close document \"$name\" saving no" || true
   done
-  pkill -x FloTile >/dev/null 2>&1 || true
+  # Kill only the self-test process this script launched (if still alive).
+  if [[ -n "${SELF_TEST_PID:-}" ]] && kill -0 "$SELF_TEST_PID" 2>/dev/null; then
+    kill "$SELF_TEST_PID" 2>/dev/null || true
+    wait "$SELF_TEST_PID" 2>/dev/null || true
+  fi
 }
 
 trap cleanup EXIT
@@ -75,10 +106,15 @@ xcodebuild -project FloTile.xcodeproj -scheme FloTile -configuration Debug \
   -derivedDataPath .build/xcode build >build/live-ax-build.log 2>&1 \
   || { tail -30 build/live-ax-build.log; echo "build failed" >&2; exit 1; }
 
+osascript -e 'tell application "TextEdit" to activate' -e 'delay 1'
+# State restoration guard: TextEdit may have reopened documents on launch. Refuse
+# before creating anything (CREATED_DOCS is still empty, so cleanup closes nothing).
+if ! DOC_COUNT="$(osascript -e 'tell application "TextEdit" to count of documents' 2>/dev/null)" || [[ "$DOC_COUNT" != "0" ]]; then
+  echo "TextEdit reopened ${DOC_COUNT:-an unknown number of} document(s) via state restoration (or the count query failed); close them and rerun." >&2
+  exit 1
+fi
 osascript <<'OSA'
 tell application "TextEdit"
-  activate
-  delay 1
   repeat while (count of documents) < 2
     make new document
   end repeat
@@ -118,7 +154,7 @@ osascript -e 'tell application "System Events" to tell process "TextEdit" to set
 # The Fonts panel may hold focus; the app is still TextEdit, which is what matters.
 sleep 0.5
 
-"$APP/Contents/MacOS/FloTile" --self-test-tile >"$OUT" || { echo "self-test exited non-zero:"; cat "$OUT"; exit 1; }
+run_self_test "$OUT" --self-test-tile || { echo "self-test exited non-zero:"; cat "$OUT"; exit 1; }
 sleep 0.5
 AFTER="$(panel_pos)" || exit 1
 echo "Fonts panel position after:  $AFTER"
@@ -177,7 +213,7 @@ PANEL_BEFORE_UNDO="$(panel_pos)" || exit 1
 osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
 sleep 0.5
 UNDO_OUT="build/live-ax-undo.json"
-"$APP/Contents/MacOS/FloTile" --self-test-tile-undo >"$UNDO_OUT" || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; exit 1; }
+run_self_test "$UNDO_OUT" --self-test-tile-undo || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; exit 1; }
 sleep 0.5
 AFTER_A="$(doc_geom "$DOC_A")"; AFTER_B="$(doc_geom "$DOC_B")"
 PANEL_AFTER_UNDO="$(panel_pos)" || exit 1
