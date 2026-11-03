@@ -78,7 +78,8 @@ public struct TileCoordinator: Sendable {
         case .ready(let p, let e): pid = p; eligible = e
         }
 
-        let before = Dictionary(uniqueKeysWithValues: eligible.map { ($0.id, $0.frame) })
+        // Adapter contract says ids are unique, but never trap on a misbehaving adapter: last wins.
+        let before = Dictionary(eligible.map { ($0.id, $0.frame) }, uniquingKeysWith: { _, last in last })
         let (outcome, requested) = applyLayout(eligible, on: screen)
         if requested.isEmpty { return (outcome, nil) }
 

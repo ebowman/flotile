@@ -35,6 +35,18 @@ final class TileCoordinatorSnapshotTests: XCTestCase {
         XCTAssertEqual(snap.takenAt, clock)
     }
 
+    func testDuplicateWindowIDDoesNotTrapAndLastFrameWins() throws {
+        let (c, _) = make([win(1, x: 10), win(1, x: 50)])
+        let r = c.tileAndSnapshot(on: screen)
+        switch r.outcome {
+        case .tiled, .partial: break
+        default: XCTFail("unexpected outcome \(r.outcome)")
+        }
+        let snap = try XCTUnwrap(r.snapshot)
+        XCTAssertEqual(snap.before.count, 1)
+        XCTAssertEqual(snap.before[WindowID(1)], win(1, x: 50).frame)
+    }
+
     func testDefaultClockInit() {
         let ws = FakeWindowSystem()
         ws.windowsByPID[pid] = [win(1)]
