@@ -113,6 +113,22 @@ final class TileSessionTests: XCTestCase {
         XCTAssertEqual(outcomes, [.tiled(count: 2), .restored(count: 2), .tiled(count: 2)])
     }
 
+    func testPartialTileCanUndoAndRestoresOnlyMovedWindow() {
+        let originals = [win(1, x: 10), win(2, x: 20)]
+        let (s, ws) = make(originals)
+        ws.failingWindowIDs = [WindowID(2)]
+        XCTAssertEqual(s.handleClick(on: screen), .partial(succeeded: 1, failed: 1))
+        XCTAssertEqual(s.snapshotCount, 1)
+        // Windows left as-is: 1 at its tiled frame, 2 still at its original frame.
+        XCTAssertTrue(s.canUndo(frontmostPID: 100, on: screen))
+        let phase1 = ws.setFrameCalls.count
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 1))
+        XCTAssertEqual(s.lastDecision, .restore)
+        let second = ws.setFrameCalls[phase1...]
+        XCTAssertEqual(second.map { $0.0 }, [WindowID(1)])
+        XCTAssertEqual(second.first?.1, originals[0].frame)
+    }
+
     func testCanUndo() {
         let (s, ws) = make([win(1), win(2)])
         XCTAssertFalse(s.canUndo(frontmostPID: 100, on: screen))

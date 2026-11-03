@@ -24,6 +24,22 @@ final class UndoDecisionTests: XCTestCase {
 
     private var exact: [WindowInfo] { [win(1, f1), win(2, f2)] }
 
+    /// before {1,2}, after {1}: window 2 failed to move.
+    private func partialSnapshot() -> TileSnapshot {
+        TileSnapshot(pid: 100, screenID: screen1,
+                     before: [WindowID(1): f1.offsetBy(dx: 7, dy: 7), WindowID(2): f2.offsetBy(dx: 7, dy: 7)],
+                     after: [WindowID(1): f1],
+                     takenAt: Date(timeIntervalSince1970: 0))
+    }
+
+    func testPartialSnapshotIgnoresUnmovedWindow() {
+        let p = partialSnapshot()
+        XCTAssertEqual(decide(p, [win(1, f1), win(2, f2.offsetBy(dx: 300, dy: 9))]), .restore)
+        XCTAssertEqual(decide(p, [win(1, f1)]), .restore)
+        XCTAssertEqual(decide(p, [win(1, f1), win(2, f2), win(3, f2)]), .tileFresh(.windowSetChanged))
+        XCTAssertEqual(decide(p, [win(1, f1.offsetBy(dx: 10, dy: 0)), win(2, f2)]), .tileFresh(.framesChanged))
+    }
+
     func testNilSnapshot() {
         XCTAssertEqual(decide(nil, exact), .tileFresh(.noSnapshot))
     }

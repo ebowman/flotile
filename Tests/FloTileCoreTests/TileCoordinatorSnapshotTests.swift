@@ -129,11 +129,34 @@ final class TileCoordinatorSnapshotTests: XCTestCase {
         XCTAssertEqual(Set(snap.after.keys), [WindowID(1), WindowID(3)])
     }
 
+    func testRestoreOnlyRestoresMovedWindowsAfterPartialTile() throws {
+        let (c, ws) = make([win(1, x: 10), win(2, x: 20)])
+        ws.failingWindowIDs = [WindowID(2)]
+        let r = c.tileAndSnapshot(on: screen)
+        XCTAssertEqual(r.outcome, .partial(succeeded: 1, failed: 1))
+        let snap = try XCTUnwrap(r.snapshot)
+        XCTAssertEqual(Set(snap.after.keys), [WindowID(1)])
+        let calls = ws.setFrameCalls.count
+        XCTAssertEqual(c.restore(snap), .restored(count: 1))
+        let restoreCalls = ws.setFrameCalls[calls...]
+        XCTAssertEqual(restoreCalls.map { $0.0 }, [WindowID(1)])
+        XCTAssertEqual(restoreCalls.first?.1, snap.before[WindowID(1)])
+    }
+
+    func testRestoreWithEmptyAfterIsNoWindows() {
+        let (c, ws) = make([])
+        let snap = TileSnapshot(pid: pid, screenID: screen.id,
+                                before: [WindowID(1): CGRect(x: 1, y: 1, width: 5, height: 5)],
+                                after: [:], takenAt: clock)
+        XCTAssertEqual(c.restore(snap), .noWindows)
+        XCTAssertTrue(ws.setFrameCalls.isEmpty)
+    }
+
     private func snapshot(_ ids: [Int]) -> TileSnapshot {
         let before = Dictionary(uniqueKeysWithValues: ids.map {
             (WindowID($0), CGRect(x: $0, y: 2 * $0, width: 300, height: 200))
         })
-        return TileSnapshot(pid: pid, screenID: screen.id, before: before, after: [:], takenAt: clock)
+        return TileSnapshot(pid: pid, screenID: screen.id, before: before, after: before, takenAt: clock)
     }
 
     func testRestoreSetsBeforeFrames() {

@@ -96,14 +96,16 @@ public struct TileCoordinator: Sendable {
         return (outcome, snapshot)
     }
 
-    /// Moves every window in `snapshot.before` back to its recorded frame.
+    /// Moves every window in `snapshot.after` (the windows tiling moved) back to its
+    /// recorded `before` frame; windows that failed to move are left alone and not counted.
     /// Performs no trust check: callers decide (the session checks trust via
     /// decide/tile). Unknown windows (setFrame throws) count as failures.
     public func restore(_ snapshot: TileSnapshot) -> TileOutcome {
-        if snapshot.before.isEmpty { return .noWindows }
+        if snapshot.before.isEmpty || snapshot.after.isEmpty { return .noWindows }
         var succeeded = 0
         var failed = 0
-        for (id, frame) in snapshot.before.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+        for id in snapshot.after.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let frame = snapshot.before[id] else { continue }
             do {
                 try windowSystem.setFrame(frame, of: id)
                 succeeded += 1
