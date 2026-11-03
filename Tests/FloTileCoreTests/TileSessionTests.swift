@@ -19,7 +19,8 @@ final class TileSessionTests: XCTestCase {
     }
 
     /// Fake whose setFrame is reflected in windowsByPID, like a real system.
-    private func make(_ windows: [WindowInfo], pid: pid_t = 100) -> (TileSession, FakeWindowSystem) {
+    private func make(_ windows: [WindowInfo], pid: pid_t = 100,
+                      maximize: @escaping () -> Bool = { false }) -> (TileSession, FakeWindowSystem) {
         let ws = FakeWindowSystem()
         ws.frontmostPID = pid
         ws.windowsByPID[pid] = windows
@@ -32,7 +33,7 @@ final class TileSessionTests: XCTestCase {
             }
         }
         let c = TileCoordinator(windowSystem: ws)
-        return (TileSession(coordinator: c, windowSystem: ws), ws)
+        return (TileSession(coordinator: c, windowSystem: ws, maximizeOnSecondClick: maximize), ws)
     }
 
     func testTileThenUnchangedClickRestores() {
@@ -255,5 +256,100 @@ final class TileSessionTests: XCTestCase {
         XCTAssertEqual(s.lastDecision, .restore)
         XCTAssertEqual(s.undo(on: screen), .nothingToUndo)
         XCTAssertNil(s.lastDecision)
+    }
+
+    // MARK: maximize cycle
+
+    private var fill: CGRect { TilingLayout.insetIntegral(screen.visibleFrame) }
+
+    func testThreeStepCycle() {
+        let originals = [win(1, x: 10), win(2, x: 20)]
+        let (s, ws) = make(originals, maximize: { true })
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertTrue(s.canUndo(frontmostPID: 100, on: screen))
+        XCTAssertEqual(s.handleClick(on: screen), .maximized(count: 2))
+        XCTAssertEqual(s.lastDecision, .maximize)
+        XCTAssertEqual(s.snapshotCount, 1)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), [fill, fill])
+        XCTAssertTrue(s.canUndo(frontmostPID: 100, on: screen))
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+        XCTAssertEqual(s.snapshotCount, 0)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
+        XCTAssertFalse(s.canUndo(frontmostPID: 100, on: screen))
+    }
+
+    func testMovingWindowAfterMaximizeTilesFresh() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)], maximize: { true })
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        var list = ws.windowsByPID[100]!
+        list[0] = WindowInfo(id: list[0].id, frame: CGRect(x: 50, y: 50, width: 300, height: 300),
+                             isMinimized: false, isStandard: true, discoveryIndex: list[0].discoveryIndex)
+        ws.windowsByPID[100] = list
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertEqual(s.lastDecision, .tileFresh(.framesChanged))
+    }
+
+    func testClosingWindowAfterMaximizeTilesFresh() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)], maximize: { true })
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        ws.windowsByPID[100] = [ws.windowsByPID[100]![0]]
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 1))
+        XCTAssertEqual(s.lastDecision, .tileFresh(.windowSetChanged))
+    }
+
+    func testSingleWindowSkipsMaximize() {
+        let (s, _) = make([win(1, x: 10)], maximize: { true })
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 1))
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 1))
+        XCTAssertEqual(s.lastDecision, .restore)
+    }
+
+    func testSettingTurnedOffAfterTileRestores() {
+        var on = true
+        let (s, _) = make([win(1, x: 10), win(2, x: 20)], maximize: { on })
+        _ = s.handleClick(on: screen)
+        on = false
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+    }
+
+    func testSettingTurnedOnAfterMaximizeStillRestores() {
+        var on = true
+        let (s, _) = make([win(1, x: 10), win(2, x: 20)], maximize: { on })
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        on = false
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        on = true
+        let (s2, _) = make([win(1, x: 10), win(2, x: 20)], maximize: { on })
+        _ = s2.handleClick(on: screen)
+        _ = s2.handleClick(on: screen)
+        XCTAssertEqual(s2.handleClick(on: screen), .restored(count: 2))
+    }
+
+    func testExplicitUndoAfterMaximizeRestoresOriginals() {
+        let originals = [win(1, x: 10), win(2, x: 20)]
+        let (s, ws) = make(originals, maximize: { true })
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        XCTAssertEqual(s.undo(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+        XCTAssertEqual(s.snapshotCount, 0)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
+    }
+
+    func testMaximizeAllFailingKeepsTiledSnapshot() {
+        let originals = [win(1, x: 10), win(2, x: 20)]
+        let (s, ws) = make(originals, maximize: { true })
+        _ = s.handleClick(on: screen)
+        ws.failingWindowIDs = [WindowID(1), WindowID(2)]
+        XCTAssertEqual(s.handleClick(on: screen), .partial(succeeded: 0, failed: 2))
+        XCTAssertEqual(s.lastDecision, .maximize)
+        XCTAssertEqual(s.snapshotCount, 1)
+        ws.failingWindowIDs = []
+        XCTAssertEqual(s.undo(on: screen), .restored(count: 2))
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
     }
 }

@@ -3,13 +3,18 @@ import CoreGraphics
 
 /// Outcome of deciding what a tile click should do given the last snapshot.
 ///
-/// A second click undoes the previous tiling only when the same app is frontmost on the same
-/// screen, every window the tiling moved is still present and (approximately) where tiling left
-/// it, and no new eligible window has appeared; windows that failed to move are ignored.
-/// Otherwise the click tiles afresh.
+/// A later click continues the cycle only when the same app is frontmost on the same screen,
+/// every window the last step moved is still present and (approximately) where that step left
+/// it, and no new eligible window has appeared; windows that never moved are ignored.
+/// With "maximize on second click" on, the click after tiling maximizes every moved window and
+/// the next click restores the originals; with it off, the click after tiling restores. A lone
+/// window that already fills the display skips the maximize step. If a guard fails, the click
+/// tiles afresh.
 public enum UndoDecision: Equatable, Sendable {
     /// Restore the `before` frames.
     case restore
+    /// Give every moved window the fill frame, keeping stacking order.
+    case maximize
     /// Tile again from scratch, for the given reason.
     case tileFresh(Reason)
 
@@ -25,7 +30,9 @@ public enum UndoDecision: Equatable, Sendable {
         frontmostPID: pid_t,
         screenID: ScreenID,
         currentEligibleWindows: [WindowInfo],
-        tolerance: CGFloat = 2
+        tolerance: CGFloat = 2,
+        maximizeOnSecondClick: Bool = false,
+        fillFrame: CGRect? = nil
     ) -> UndoDecision {
         guard let snapshot else { return .tileFresh(.noSnapshot) }
         if snapshot.pid != frontmostPID { return .tileFresh(.differentApp) }
@@ -42,6 +49,13 @@ public enum UndoDecision: Equatable, Sendable {
                   FrameComparison.approximatelyEqual(w.frame, expected, tolerance: tolerance) else {
                 return .tileFresh(.framesChanged)
             }
+        }
+        if snapshot.phase == .tiled, maximizeOnSecondClick, let fillFrame {
+            let needsMaximize = currentEligibleWindows.contains { w in
+                !unmoved.contains(w.id) && snapshot.after[w.id] != nil
+                    && !FrameComparison.approximatelyEqual(w.frame, fillFrame, tolerance: tolerance)
+            }
+            if needsMaximize { return .maximize }
         }
         return .restore
     }

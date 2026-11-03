@@ -1,20 +1,24 @@
 import Foundation
 import CoreGraphics
 
-/// Per-app snapshot store implementing the guarded toggle.
+/// Per-app snapshot store implementing the guarded click cycle.
 ///
-/// In plain words: clicking tiles the frontmost app's windows and remembers where
-/// they were. Clicking again undoes the tiling only when the same app is frontmost on the
-/// same screen, every window the tiling moved is still present and where tiling left it, and
-/// no new eligible window has appeared; windows that failed to move are ignored.
-/// If anything changed, the click tiles afresh and replaces the old snapshot (only when the new tile
-/// produced one; a tile that yields no snapshot keeps the previous snapshot).
+/// In plain words: clicking tiles the frontmost app's windows and remembers where they were.
+/// With "maximize on second click" on, click 2 maximizes every moved window in place (stacking
+/// order kept) and click 3 restores the original frames; with it off, click 2 restores. The same
+/// guards apply to every step: the same app is frontmost on the same screen, every moved window
+/// is still present and where the last step left it, and no new eligible window has appeared;
+/// windows that never moved are ignored. A lone window that already fills the display skips the
+/// maximize step. If anything changed, the click tiles afresh and replaces the old snapshot (only
+/// when the new tile produced one; a tile that yields no snapshot keeps the previous snapshot).
+/// Explicit undo always restores the originals from either phase.
 /// Each app has its own snapshot, and a snapshot is consumed when it is restored.
 @MainActor
 public final class TileSession {
     private let coordinator: TileCoordinator
     private let windowSystem: any WindowSystem
     private let tolerance: CGFloat
+    private let maximizeOnSecondClick: () -> Bool
     private var snapshots: [pid_t: TileSnapshot] = [:]
 
     /// The decision taken by the most recent `handleClick`/`undo`. It is nil before any call
@@ -25,10 +29,12 @@ public final class TileSession {
     /// Number of stored snapshots (for tests).
     public var snapshotCount: Int { snapshots.count }
 
-    public init(coordinator: TileCoordinator, windowSystem: any WindowSystem, tolerance: CGFloat = 2) {
+    public init(coordinator: TileCoordinator, windowSystem: any WindowSystem, tolerance: CGFloat = 2,
+                maximizeOnSecondClick: @escaping () -> Bool = { false }) {
         self.coordinator = coordinator
         self.windowSystem = windowSystem
         self.tolerance = tolerance
+        self.maximizeOnSecondClick = maximizeOnSecondClick
     }
 
     /// Decides for `pid` using a fresh window enumeration. If enumeration throws,
@@ -40,7 +46,9 @@ public final class TileSession {
         let current = (try? windowSystem.windows(forApplication: pid)) ?? []
         let eligible = WindowSelector.eligibleWindows(current, on: screen)
         return UndoDecision.decide(snapshot: snapshots[pid], frontmostPID: pid, screenID: screen.id,
-                                   currentEligibleWindows: eligible, tolerance: tolerance)
+                                   currentEligibleWindows: eligible, tolerance: tolerance,
+                                   maximizeOnSecondClick: maximizeOnSecondClick(),
+                                   fillFrame: TilingLayout.insetIntegral(screen.visibleFrame))
     }
 
     private func restoreAndClear(pid: pid_t, snapshot: TileSnapshot) -> TileOutcome {
@@ -60,6 +68,12 @@ public final class TileSession {
         case .restore:
             // decide returns .restore only when a snapshot exists for pid.
             return restoreAndClear(pid: pid, snapshot: snapshots[pid]!)
+        case .maximize:
+            // decide returns .maximize only when a snapshot exists for pid. A nil snapshot keeps
+            // the tiled one, so the next click retries.
+            let result = coordinator.maximizeAndSnapshot(snapshots[pid]!, on: screen)
+            if let snapshot = result.snapshot { snapshots[pid] = snapshot }
+            return result.outcome
         case .tileFresh:
             let result = coordinator.tileAndSnapshot(on: screen)
             // A tile that produced no snapshot (failed enumeration, no windows, nothing moved)
@@ -73,7 +87,8 @@ public final class TileSession {
     /// Whether an undo would currently succeed for `frontmostPID`. No side effects.
     public func canUndo(frontmostPID: pid_t?, on screen: ScreenInfo) -> Bool {
         guard let pid = frontmostPID, windowSystem.isTrusted else { return false }
-        return decision(for: pid, on: screen) == .restore
+        let d = decision(for: pid, on: screen)
+        return d == .restore || d == .maximize
     }
 
     /// Explicit undo: restores the frontmost app's snapshot if still valid, else `.nothingToUndo`.
