@@ -5,7 +5,7 @@ struct SettingsView: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 8) {
             Toggle("Open at Login", isOn: Binding(
                 get: { model.openAtLogin },
                 set: { model.setOpenAtLogin($0) }
@@ -14,9 +14,8 @@ struct SettingsView: View {
                 Text(message).font(.footnote).foregroundStyle(.red)
             }
         }
-        .formStyle(.grouped)
+        .padding(20)
         .frame(width: 320)
-        .padding()
         .onAppear { model.refresh() }
     }
 }

@@ -22,9 +22,13 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private convenience init(model: SettingsModel) {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
+        let host = NSHostingController(rootView: SettingsView(model: model))
+        host.sizingOptions = [.preferredContentSize]
+        host.view.layoutSubtreeIfNeeded()
+        let window = NSWindow(contentViewController: host)
         window.title = "FlöTile Settings"
         window.styleMask = [.titled, .closable]
+        window.setContentSize(host.view.fittingSize)
         window.isReleasedWhenClosed = false
         window.center()
         self.init(window: window)
