@@ -30,29 +30,32 @@ final class StatusItemControllerTests: XCTestCase {
     func testMenuStructure() {
         let (controller, _) = make()
         let menu = controller.buildMenu()
-        XCTAssertEqual(menu.items.count, 6)
+        XCTAssertEqual(menu.items.count, 8)
         XCTAssertFalse(menu.autoenablesItems)
-        XCTAssertEqual(menu.items.map(\.title), ["Undo Tiling", "", "Settings…", "Check for Updates…", "", "Quit FlöTile"])
+        XCTAssertEqual(menu.items.map(\.title), ["About FlöTile", "", "Undo Tiling", "", "Settings…", "Check for Updates…", "", "Quit FlöTile"])
+        XCTAssertEqual(menu.items[0].title, "About FlöTile")
         XCTAssertTrue(menu.items[1].isSeparatorItem)
-        XCTAssertTrue(menu.items[4].isSeparatorItem)
-        XCTAssertEqual(menu.items[0].keyEquivalent, "")
-        XCTAssertEqual(menu.items[2].keyEquivalent, ",")
-        XCTAssertTrue(menu.items[2].keyEquivalentModifierMask.contains(.command))
-        XCTAssertEqual(menu.items[3].keyEquivalent, "")
-        XCTAssertEqual(menu.items[5].keyEquivalent, "q")
+        XCTAssertEqual(menu.items[2].title, "Undo Tiling")
+        XCTAssertTrue(menu.items[3].isSeparatorItem)
+        XCTAssertTrue(menu.items[6].isSeparatorItem)
+        XCTAssertEqual(menu.items[2].keyEquivalent, "")
+        XCTAssertEqual(menu.items[4].keyEquivalent, ",")
+        XCTAssertTrue(menu.items[4].keyEquivalentModifierMask.contains(.command))
+        XCTAssertEqual(menu.items[5].keyEquivalent, "")
+        XCTAssertEqual(menu.items[7].keyEquivalent, "q")
     }
 
     func testUndoEnabledFollowsCanUndo() {
         let (controller, c) = make()
         c.canUndo = true
-        XCTAssertTrue(controller.buildMenu().items[0].isEnabled)
+        XCTAssertTrue(controller.buildMenu().items[2].isEnabled)
         c.canUndo = false
-        XCTAssertFalse(controller.buildMenu().items[0].isEnabled)
+        XCTAssertFalse(controller.buildMenu().items[2].isEnabled)
     }
 
     func testUndoActionInvokesOnUndo() throws {
         let (controller, c) = make()
-        let item = controller.buildMenu().items[0]
+        let item = controller.buildMenu().items[2]
         let target = try XCTUnwrap(item.target)
         _ = target.perform(try XCTUnwrap(item.action), with: item)
         XCTAssertEqual(c.undos, 1)
@@ -86,9 +89,9 @@ final class StatusItemControllerTests: XCTestCase {
     func testMenuItemsInvokeClosures() throws {
         let (controller, c) = make()
         let menu = controller.buildMenu()
-        let settings = menu.items[2]
-        let updates = menu.items[3]
-        let quit = menu.items[5]
+        let settings = menu.items[4]
+        let updates = menu.items[5]
+        let quit = menu.items[7]
         let target = try XCTUnwrap(settings.target)
         _ = target.perform(try XCTUnwrap(settings.action), with: settings)
         XCTAssertEqual(c.settings, 1)

@@ -86,6 +86,10 @@ final class StatusItemController: NSObject {
         menu.autoenablesItems = false
         // canUndo is evaluated here, at build time: showMenu builds the menu before
         // performClick, so the frontmost app is the one the user was working in.
+        let about = NSMenuItem(title: "About FlöTile", action: #selector(aboutItemSelected), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        menu.addItem(NSMenuItem.separator())
         let undo = NSMenuItem(title: "Undo Tiling", action: #selector(undoItemSelected), keyEquivalent: "")
         undo.target = self
         undo.isEnabled = canUndo()
@@ -115,6 +119,7 @@ final class StatusItemController: NSObject {
         item.menu = nil
     }
 
+    @objc private func aboutItemSelected() { AboutPanelPresenter.show() }
     @objc private func undoItemSelected() { onUndo() }
     @objc private func settingsItemSelected() { onOpenSettings() }
     @objc private func checkForUpdatesItemSelected() { onCheckForUpdates() }

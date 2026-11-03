@@ -10,6 +10,7 @@ A plain click on the FlöTile menu bar icon tiles every standard window of the f
 
 Option-click, right-click or control-click opens a menu with these items, in order:
 
+- **About FlöTile** (version, copyright and a link to the GitHub repository)
 - **Undo Tiling** (enabled only when an undo is currently valid)
 - **Settings…** (one toggle: Open at Login)
 - **Check for Updates…**
