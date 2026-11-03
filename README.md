@@ -6,7 +6,7 @@ FlöTile is a macOS menu bar app that tiles the front app's windows into a tidy 
 
 ## What it does
 
-A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. A second plain click restores the previous layout, but only if the same app is still frontmost on the same display, the same windows exist and none has moved or resized since the tiling; otherwise the click tiles again. Undo is single level.
+A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. A second plain click restores the previous layout, but only if the same app is still frontmost on the same display, the windows the tiling moved are all still there, unmoved and unresized, and no new window has appeared since; a window that could not be moved is ignored by that check and left where it is. Otherwise the click tiles again. Undo is single level.
 
 Option-click, right-click or control-click opens a menu with these items, in order:
 
@@ -67,7 +67,7 @@ A build signed ad hoc or with a personal team gets a new signature on every rebu
 
 ### Repository layout
 
-- `Package.swift`: the `FloTileCore` library (Foundation, CoreGraphics and CryptoKit only, never AppKit). Sources in `Sources/FloTileCore`, tests in `Tests/FloTileCoreTests` (XCTest, Swift Testing and fixtures).
+- `Package.swift`: the `FloTileCore` library (Foundation, CoreGraphics, CryptoKit and Combine only, never AppKit or ApplicationServices). Sources in `Sources/FloTileCore`, tests in `Tests/FloTileCoreTests` (XCTest, Swift Testing and fixtures).
 - `project.yml`: xcodegen spec. App target `FloTile` in `App/Sources`, app-hosted tests in `App/Tests`.
 - `scripts/`: `coverage-gate.sh`, `generate-icon.sh`, `build-app.sh`, `make-dmg.sh`, `notarize-dmg.sh`, `publish-release.sh`, `live-ax-test.sh`, `read-app-version.sh`, `lib/resolve-codesign-identity.sh`.
 - `.github/workflows/ci.yml`: CI on macOS.

@@ -4,8 +4,9 @@ import CoreGraphics
 /// Per-app snapshot store implementing the guarded toggle.
 ///
 /// In plain words: clicking tiles the frontmost app's windows and remembers where
-/// they were. Clicking again undoes the tiling only if nothing has changed since
-/// (same app, same screen, same windows, every window still where tiling left it).
+/// they were. Clicking again undoes the tiling only when the same app is frontmost on the
+/// same screen, every window the tiling moved is still present and where tiling left it, and
+/// no new eligible window has appeared; windows that failed to move are ignored.
 /// If anything changed, the click tiles afresh and replaces the old snapshot (only when the new tile
 /// produced one; a tile that yields no snapshot keeps the previous snapshot).
 /// Each app has its own snapshot, and a snapshot is consumed when it is restored.

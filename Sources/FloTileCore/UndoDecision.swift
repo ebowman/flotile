@@ -3,9 +3,10 @@ import CoreGraphics
 
 /// Outcome of deciding what a tile click should do given the last snapshot.
 ///
-/// A second click undoes the previous tiling only when nothing has changed since:
-/// same app, same screen, same set of eligible windows (ignoring windows that failed to
-/// move), and every moved window still (approximately) where tiling left it. Otherwise the click tiles afresh.
+/// A second click undoes the previous tiling only when the same app is frontmost on the same
+/// screen, every window the tiling moved is still present and (approximately) where tiling left
+/// it, and no new eligible window has appeared; windows that failed to move are ignored.
+/// Otherwise the click tiles afresh.
 public enum UndoDecision: Equatable, Sendable {
     /// Restore the `before` frames.
     case restore

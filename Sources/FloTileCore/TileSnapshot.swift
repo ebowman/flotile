@@ -7,7 +7,7 @@ public struct TileSnapshot: Equatable, Sendable {
     public let pid: pid_t
     /// Screen the windows were tiled on.
     public let screenID: ScreenID
-    /// Frames of the eligible windows prior to tiling (what undo restores).
+    /// Frames of the eligible windows prior to tiling. Undo restores the `before` frames of the windows present in `after` (the ones the tiling moved).
     public let before: [WindowID: CGRect]
     /// Frames observed AFTER tiling, re-read from the system (not the requested
     /// frames), because some apps clamp sizes.
