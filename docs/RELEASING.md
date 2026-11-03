@@ -21,6 +21,10 @@ Releases are Developer ID signed, notarized DMGs published to GitHub Releases, t
 6. `make release-dry-run` (runs the release flow without publishing; check the output).
 7. `make release` (creates the GitHub release and uploads the assets).
 
+## Release notes
+
+`scripts/publish-release.sh` generates the "What's new" bullets from commit subjects since the previous `v*` tag on origin (bead ids, `beads:`, `Bump version` and merge commits are dropped). Set `RELEASE_NOTES_EXTRA=path/to/file.md` to prepend headline prose to that section.
+
 ## What gets published
 
 - `FloTile-<version>.dmg`
