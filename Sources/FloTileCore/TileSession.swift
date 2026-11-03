@@ -16,7 +16,9 @@ public final class TileSession {
     private let tolerance: CGFloat
     private var snapshots: [pid_t: TileSnapshot] = [:]
 
-    /// The decision taken by the most recent `handleClick`/`undo` (nil before any).
+    /// The decision taken by the most recent `handleClick`/`undo`. It is nil before any call
+    /// and after a call that returned early (`.accessibilityNotGranted`, `.noFrontmostApp`,
+    /// `.nothingToUndo`), so it never carries a stale value from an earlier call.
     public private(set) var lastDecision: UndoDecision?
 
     /// Number of stored snapshots (for tests).
@@ -32,6 +34,8 @@ public final class TileSession {
     /// the current window list is treated as empty so the decision is a fresh
     /// tile; the coordinator then reports the real `.failed` error.
     private func decision(for pid: pid_t, on screen: ScreenInfo) -> UndoDecision {
+        // No snapshot: decide returns .tileFresh(.noSnapshot) regardless, so skip the AX read.
+        guard snapshots[pid] != nil else { return .tileFresh(.noSnapshot) }
         let current = (try? windowSystem.windows(forApplication: pid)) ?? []
         let eligible = WindowSelector.eligibleWindows(current, on: screen)
         return UndoDecision.decide(snapshot: snapshots[pid], frontmostPID: pid, screenID: screen.id,
@@ -46,6 +50,7 @@ public final class TileSession {
 
     /// Handles a tile click: restores when the guarded toggle allows it, else tiles afresh.
     public func handleClick(on screen: ScreenInfo) -> TileOutcome {
+        lastDecision = nil
         guard windowSystem.isTrusted else { return .accessibilityNotGranted }
         guard let pid = windowSystem.frontmostApplicationPID() else { return .noFrontmostApp }
         let decision = decision(for: pid, on: screen)
@@ -72,6 +77,7 @@ public final class TileSession {
 
     /// Explicit undo: restores the frontmost app's snapshot if still valid, else `.nothingToUndo`.
     public func undo(on screen: ScreenInfo) -> TileOutcome {
+        lastDecision = nil
         guard let pid = windowSystem.frontmostApplicationPID(),
               canUndo(frontmostPID: pid, on: screen),
               let snapshot = snapshots[pid] else { return .nothingToUndo }

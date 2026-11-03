@@ -204,4 +204,56 @@ final class TileSessionTests: XCTestCase {
         XCTAssertEqual(s.undo(on: screen), .restored(count: 1))
         XCTAssertEqual(ws.setFrameCalls.last?.1, original.frame)
     }
+
+    func testCanUndoWithoutSnapshotDoesNotEnumerate() {
+        let (s, ws) = make([win(1), win(2)])
+        let before = ws.windowsCallCount
+        XCTAssertFalse(s.canUndo(frontmostPID: 100, on: screen))
+        XCTAssertEqual(ws.windowsCallCount, before)
+    }
+
+    func testFirstClickDecisionDoesNotEnumerate() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)])
+        let before = ws.windowsCallCount
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        // Only the coordinator enumerates: one read in prepare and one re-read after
+        // setting frames in tileAndSnapshot. The decision step adds none (it used to add a third).
+        XCTAssertEqual(ws.windowsCallCount - before, 2)
+        XCTAssertEqual(s.lastDecision, .tileFresh(.noSnapshot))
+    }
+
+    func testCanUndoWithSnapshotEnumeratesOnce() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)])
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        let before = ws.windowsCallCount
+        XCTAssertTrue(s.canUndo(frontmostPID: 100, on: screen))
+        XCTAssertEqual(ws.windowsCallCount - before, 1)
+    }
+
+    func testLastDecisionResetsOnEarlyReturns() {
+        let (s, ws) = make([win(1, x: 10), win(2, x: 20)])
+        XCTAssertNil(s.lastDecision)
+        _ = s.handleClick(on: screen)
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+
+        ws.isTrusted = false
+        XCTAssertEqual(s.handleClick(on: screen), .accessibilityNotGranted)
+        XCTAssertNil(s.lastDecision)
+        ws.isTrusted = true
+
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        XCTAssertEqual(s.lastDecision, .restore)
+        ws.frontmostPID = nil
+        XCTAssertEqual(s.handleClick(on: screen), .noFrontmostApp)
+        XCTAssertNil(s.lastDecision)
+        ws.frontmostPID = 100
+
+        _ = s.handleClick(on: screen)
+        _ = s.handleClick(on: screen)
+        XCTAssertEqual(s.lastDecision, .restore)
+        XCTAssertEqual(s.undo(on: screen), .nothingToUndo)
+        XCTAssertNil(s.lastDecision)
+    }
 }
