@@ -249,7 +249,18 @@ panel_pos() {
     || { echo "could not read position of window \"$PANEL_NAME\" (panel not found?)" >&2; return 1; }
   echo "${out// /}"
 }
+
+ensure_panel_visible() {
+  osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
+  sleep 0.5
+  if panel_exists; then
+    return 0
+  fi
+  echo 'live-ax-test: Fonts panel hidden after focus change; reopening' >&2
+  open_fonts_panel
+}
 echo "TextEdit windows: $(osascript -e 'tell application "System Events" to tell process "TextEdit" to get name of every window')"
+ensure_panel_visible || exit 1
 BEFORE="$(panel_pos)" || exit 1
 echo "Fonts panel position before: $BEFORE"
 
@@ -260,6 +271,7 @@ sleep 0.5
 
 run_self_test "$OUT" --self-test-tile || { echo "self-test exited non-zero:"; cat "$OUT"; exit 1; }
 sleep 0.5
+ensure_panel_visible || exit 1
 AFTER="$(panel_pos)" || exit 1
 echo "Fonts panel position after:  $AFTER"
 echo "Self-test JSON: $(cat "$OUT")"
@@ -312,6 +324,7 @@ set_geom "$DOC_B" 700 420 520 380
 sleep 0.5
 ORIG_A="$(doc_geom "$DOC_A")"; ORIG_B="$(doc_geom "$DOC_B")"
 echo "Recorded originals: $DOC_A=$ORIG_A $DOC_B=$ORIG_B"
+ensure_panel_visible || exit 1
 PANEL_BEFORE_UNDO="$(panel_pos)" || exit 1
 
 osascript -e 'tell application "System Events" to tell process "TextEdit" to set frontmost to true' >/dev/null
@@ -320,6 +333,7 @@ UNDO_OUT="build/live-ax-undo.json"
 run_self_test "$UNDO_OUT" --self-test-tile-undo || { echo "undo self-test exited non-zero:"; cat "$UNDO_OUT"; exit 1; }
 sleep 0.5
 AFTER_A="$(doc_geom "$DOC_A")"; AFTER_B="$(doc_geom "$DOC_B")"
+ensure_panel_visible || exit 1
 PANEL_AFTER_UNDO="$(panel_pos)" || exit 1
 echo "Undo self-test JSON: $(cat "$UNDO_OUT")"
 echo "After undo: $DOC_A=$AFTER_A $DOC_B=$AFTER_B"
