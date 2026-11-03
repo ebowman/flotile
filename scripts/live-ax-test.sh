@@ -10,9 +10,14 @@
 #   - The invoking shell/terminal must be allowed to control "System Events"
 #     (Automation + Accessibility) because TextEdit is driven via osascript.
 #   - TextEdit must NOT already have documents open (they would be closed
-#     without saving); the script refuses to run in that case. It also refuses
-#     if TextEdit still shows documents right after launch (macOS state
-#     restoration): the count must be 0 before the script creates its own.
+#     without saving); the script refuses to run in that case. Right after launch
+#     the document count must be 0, or exactly 1 pristine untitled document
+#     (empty text, unmodified, no file path) that TextEdit created at launch on
+#     Macs without iCloud; that one is adopted and closed in cleanup. Any other
+#     state (state restoration, a document with content/edits/a path) is refused
+#     with a message stating what was found.
+#   - TextEdit may show extra unnamed windows (e.g. a 280x168 window on cold
+#     launch); windows are always addressed by name, so they are tolerated.
 #   - No other FloTile process may be running (e.g. the installed
 #     /Applications/FloTile.app): UI scripting would be ambiguous and the
 #     cleanup must never kill a FloTile it did not launch. Quit it first.
@@ -150,12 +155,39 @@ xcodebuild -project FloTile.xcodeproj -scheme FloTile -configuration Debug \
   || { tail -30 build/live-ax-build.log; echo "build failed" >&2; exit 1; }
 
 osascript -e 'tell application "TextEdit" to activate' -e 'delay 1'
-# State restoration guard: TextEdit may have reopened documents on launch. Refuse
-# before creating anything (CREATED_DOCS is still empty, so cleanup closes nothing).
+# Launch-state guard: refuse before creating anything unless TextEdit has 0
+# documents, or exactly 1 pristine untitled one created at launch (no iCloud).
+# CREATED_DOCS is still empty here, so a refusal makes cleanup close nothing.
 DOC_COUNT="$(te_query "TextEdit post-launch document-count query" \
   'tell application "TextEdit" to return count of documents')" || exit 1
-if [[ "$DOC_COUNT" != "0" ]]; then
-  echo "TextEdit reopened ${DOC_COUNT:-an unknown number of} document(s) via state restoration; close them and rerun." >&2
+if [[ "$DOC_COUNT" == "0" ]]; then
+  :
+elif [[ "$DOC_COUNT" == "1" ]]; then
+  DOC1_INFO="$(te_query "TextEdit launch-document inspection" \
+    'tell application "TextEdit"' \
+    'set t to text of document 1' \
+    'set m to modified of document 1' \
+    'set hasPath to true' \
+    'try' \
+    'set p to path of document 1' \
+    'if p is missing value then set hasPath to false' \
+    'on error' \
+    'set hasPath to false' \
+    'end try' \
+    'return ((t is "") as text) & "," & (m as text) & "," & (hasPath as text)' \
+    'end tell')" || exit 1
+  if [[ "$DOC1_INFO" == "true,false,false" ]]; then
+    echo "adopting pristine untitled document created at launch"
+  else
+    IFS=',' read -r D_EMPTY D_MOD D_PATH <<<"$DOC1_INFO"
+    echo "TextEdit has 1 document after launch and it is not pristine (empty text: ${D_EMPTY:-?}, modified: ${D_MOD:-?}, has file path: ${D_PATH:-?}); close it and rerun. Refusing to adopt a document with content, modifications or a file." >&2
+    exit 1
+  fi
+elif [[ "$DOC_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "TextEdit has $DOC_COUNT documents after launch (state restoration or user documents); close them and rerun." >&2
+  exit 1
+else
+  echo "live-ax-test: unexpected TextEdit document count: '${DOC_COUNT}'" >&2
   exit 1
 fi
 osascript <<'OSA'
@@ -168,22 +200,49 @@ tell application "TextEdit"
   end repeat
 end tell
 OSA
-# Record exactly the documents we created (guard above ensured there were none before).
+# Record every document now open: the guard ensured the only pre-existing one (if any)
+# is a pristine untitled document adopted from launch, so all of them are ours to close.
 while IFS= read -r name; do
   [[ -n "$name" ]] && CREATED_DOCS+=("$name")
 done < <(osascript -e 'tell application "TextEdit" to set AppleScript'"'"'s text item delimiters to linefeed' \
                    -e 'tell application "TextEdit" to (name of every document) as text' | tr ',' '\n' | sed 's/^ *//')
-osascript <<'OSA'
-delay 0.5
+PANEL_NAME="Fonts"
+# Open the Fonts panel via Format > Font > Show Fonts (deterministic), retrying
+# until the window exists. Last attempt falls back to Cmd-T if the menu path is missing.
+panel_exists() {
+  [[ "$(osascript -e "tell application \"System Events\" to tell process \"TextEdit\" to exists window \"$PANEL_NAME\"" 2>/dev/null)" == "true" ]]
+}
+open_fonts_panel() {
+  local attempt max=6 has_menu
+  for ((attempt = 1; attempt <= max; attempt++)); do
+    has_menu="$(osascript -e 'tell application "System Events" to tell process "TextEdit" to exists menu item "Show Fonts" of menu "Font" of menu item "Font" of menu "Format" of menu bar 1' 2>/dev/null)" || has_menu=false
+    if [[ "$has_menu" == "true" ]]; then
+      osascript >/dev/null 2>&1 <<'OSA' || true
+tell application "System Events" to tell process "TextEdit"
+  set frontmost to true
+  click menu item "Show Fonts" of menu "Font" of menu item "Font" of menu "Format" of menu bar 1
+end tell
+OSA
+    elif [[ "$attempt" == "$max" ]]; then
+      osascript >/dev/null 2>&1 <<'OSA' || true
 tell application "System Events" to tell process "TextEdit"
   set frontmost to true
   keystroke "t" using command down
 end tell
-delay 1.5
 OSA
+    fi
+    sleep 0.5
+    if panel_exists; then
+      return 0
+    fi
+  done
+  echo "live-ax-test: the \"$PANEL_NAME\" panel never appeared after $max attempts. TextEdit windows: $(osascript -e 'tell application "System Events" to tell process "TextEdit" to get name of every window' 2>&1)" >&2
+  return 1
+}
+sleep 0.5
+open_fonts_panel || exit 1
 PANEL_OPENED=1
 
-PANEL_NAME="Fonts"
 panel_pos() {
   local out
   out="$(osascript -e "tell application \"System Events\" to tell process \"TextEdit\" to get position of window \"$PANEL_NAME\"" 2>/dev/null)" \
