@@ -31,7 +31,7 @@ final class TileSessionTests: XCTestCase {
                 }
             }
         }
-        let c = TileCoordinator(windowSystem: ws, screenProvider: FakeScreenProvider([screen]))
+        let c = TileCoordinator(windowSystem: ws)
         return (TileSession(coordinator: c, windowSystem: ws), ws)
     }
 

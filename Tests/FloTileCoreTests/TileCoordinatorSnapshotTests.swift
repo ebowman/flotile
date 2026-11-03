@@ -19,7 +19,7 @@ final class TileCoordinatorSnapshotTests: XCTestCase {
         let ws = FakeWindowSystem()
         ws.windowsByPID[pid] = windows
         let date = clock
-        let c = TileCoordinator(windowSystem: ws, screenProvider: FakeScreenProvider([screen]), now: { date })
+        let c = TileCoordinator(windowSystem: ws, now: { date })
         return (c, ws)
     }
 
@@ -50,7 +50,7 @@ final class TileCoordinatorSnapshotTests: XCTestCase {
     func testDefaultClockInit() {
         let ws = FakeWindowSystem()
         ws.windowsByPID[pid] = [win(1)]
-        let c = TileCoordinator(windowSystem: ws, screenProvider: FakeScreenProvider([screen]))
+        let c = TileCoordinator(windowSystem: ws)
         XCTAssertNotNil(c.tileAndSnapshot(on: screen).snapshot)
     }
 

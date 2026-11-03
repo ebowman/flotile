@@ -38,8 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settingsModel = SettingsModel(loginItems: SMAppServiceLoginItem())
         let windowSystem = AXWindowSystem()
-        let screens = AppKitScreenProvider()
-        let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: screens)
+        let coordinator = TileCoordinator(windowSystem: windowSystem)
         let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
         self.session = session
         permissionFlow = AccessibilityPermissionFlow(requestTrust: { windowSystem.requestTrust() })
@@ -109,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             finish(SelfTestReport.errorJSON("no screen available"), code: 1)
         }
         let windowSystem = AXWindowSystem()
-        let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: AppKitScreenProvider())
+        let coordinator = TileCoordinator(windowSystem: windowSystem)
         // Capture the pid BEFORE tiling so the re-read targets the same app.
         let pid = windowSystem.frontmostApplicationPID()
         let outcome = coordinator.tile(on: screen)
@@ -147,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             finish(SelfTestReport.errorJSON("no screen available"), code: 1)
         }
         let windowSystem = AXWindowSystem()
-        let coordinator = TileCoordinator(windowSystem: windowSystem, screenProvider: AppKitScreenProvider())
+        let coordinator = TileCoordinator(windowSystem: windowSystem)
         let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
         guard let pid = windowSystem.frontmostApplicationPID() else {
             finish(SelfTestReport.errorJSON("no frontmost application"), code: 1)

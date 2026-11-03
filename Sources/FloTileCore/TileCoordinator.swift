@@ -4,15 +4,11 @@ import CoreGraphics
 /// Orchestrates tiling of the frontmost application's windows on one screen.
 public struct TileCoordinator: Sendable {
     private let windowSystem: any WindowSystem
-    private let screenProvider: any ScreenProvider
     private let now: @Sendable () -> Date
 
-    /// Creates a coordinator. `screenProvider` is stored for the app layer /
-    /// future use; `tile(on:)` does not call it. `now` supplies snapshot timestamps.
-    public init(windowSystem: any WindowSystem, screenProvider: any ScreenProvider,
-                now: @escaping @Sendable () -> Date = Date.init) {
+    /// Creates a coordinator. `now` supplies snapshot timestamps.
+    public init(windowSystem: any WindowSystem, now: @escaping @Sendable () -> Date = Date.init) {
         self.windowSystem = windowSystem
-        self.screenProvider = screenProvider
         self.now = now
     }
 

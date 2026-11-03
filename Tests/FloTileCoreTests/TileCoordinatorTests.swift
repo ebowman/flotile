@@ -18,7 +18,7 @@ final class TileCoordinatorTests: XCTestCase {
     private func make(_ windows: [WindowInfo]) -> (TileCoordinator, FakeWindowSystem) {
         let ws = FakeWindowSystem()
         ws.windowsByPID[pid] = windows
-        let c = TileCoordinator(windowSystem: ws, screenProvider: FakeScreenProvider([screen]))
+        let c = TileCoordinator(windowSystem: ws)
         return (c, ws)
     }
 
