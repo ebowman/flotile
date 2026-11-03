@@ -13,4 +13,16 @@ final class SettingsViewModelIntegrationTests: XCTestCase {
         XCTAssertEqual(model.errorMessage, "boom")
         XCTAssertEqual(fake.setCalls, [true])
     }
+
+    func testMaximizeOnSecondClickDefaultsTrueAndPersistsFalse() {
+        let name = "FloTileTests-" + UUID().uuidString
+        defer { UserDefaults().removePersistentDomain(forName: name) }
+        let defaults = UserDefaults(suiteName: name)!
+        let model = SettingsModel(loginItems: FakeLoginItemService(), defaults: defaults)
+        XCTAssertTrue(model.maximizeOnSecondClick)
+        model.setMaximizeOnSecondClick(false)
+        XCTAssertFalse(model.maximizeOnSecondClick)
+        XCTAssertFalse(defaults.bool(forKey: SettingsModel.maximizeOnSecondClickKey))
+        XCTAssertNotNil(defaults.object(forKey: SettingsModel.maximizeOnSecondClickKey))
+    }
 }

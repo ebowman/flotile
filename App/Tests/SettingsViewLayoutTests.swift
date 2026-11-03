@@ -6,17 +6,31 @@ import FloTileCore
 
 @MainActor
 final class SettingsViewLayoutTests: XCTestCase {
+    private var suiteNames: [String] = []
+
+    override func tearDown() {
+        for name in suiteNames { UserDefaults().removePersistentDomain(forName: name) }
+        suiteNames = []
+        super.tearDown()
+    }
+
+    private func makeModel() -> SettingsModel {
+        let name = "FloTileTests-" + UUID().uuidString
+        suiteNames.append(name)
+        return SettingsModel(loginItems: FakeLoginItemService(), defaults: UserDefaults(suiteName: name)!)
+    }
+
     func testSettingsViewHasRealFittingSize() {
-        let model = SettingsModel(loginItems: FakeLoginItemService())
+        let model = makeModel()
         let controller = NSHostingController(rootView: SettingsView(model: model))
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize
-        XCTAssertGreaterThanOrEqual(size.height, 40, "fittingSize was \(size)")
+        XCTAssertGreaterThanOrEqual(size.height, 100, "fittingSize was \(size)")
         XCTAssertGreaterThanOrEqual(size.width, 200, "fittingSize was \(size)")
     }
 
     func testSharedSettingsWindowIsSizedToItsContent() throws {
-        SettingsWindowController.showShared(model: SettingsModel(loginItems: FakeLoginItemService()))
+        SettingsWindowController.showShared(model: makeModel())
         let window = try XCTUnwrap(SettingsWindowController.sharedWindowForTesting)
         window.layoutIfNeeded()
         let content = try XCTUnwrap(window.contentView)

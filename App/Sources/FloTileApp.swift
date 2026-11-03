@@ -36,10 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
 
-        settingsModel = SettingsModel(loginItems: SMAppServiceLoginItem())
+        let model = SettingsModel(loginItems: SMAppServiceLoginItem())
+        settingsModel = model
         let windowSystem = AXWindowSystem()
         let coordinator = TileCoordinator(windowSystem: windowSystem)
-        let session = TileSession(coordinator: coordinator, windowSystem: windowSystem)
+        let session = TileSession(
+            coordinator: coordinator,
+            windowSystem: windowSystem,
+            maximizeOnSecondClick: { [weak model] in model?.maximizeOnSecondClick ?? true }
+        )
         self.session = session
         permissionFlow = AccessibilityPermissionFlow(requestTrust: { windowSystem.requestTrust() })
         let presenter = TileOutcomePresenter(
@@ -53,7 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = StatusItemController(
             onTile: { screen in
                 let outcome = session.handleClick(on: screen)
-                let context: TileOutcomePresenter.Context = session.lastDecision == .restore ? .restoring : .tiling
+                let context: TileOutcomePresenter.Context
+                switch session.lastDecision {
+                case .restore: context = .restoring
+                case .maximize: context = .maximizing
+                default: context = .tiling
+                }
                 presenter.present(outcome, context: context)
             },
             canUndo: {
