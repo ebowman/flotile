@@ -80,7 +80,11 @@ ln -s /Applications "${STAGING_DIR}/Applications"
 rm -f "${DMG_PATH}"
 
 echo "==> Creating ${DMG_NAME}..."
-hdiutil create -volname "${VOLUME_NAME}" -srcfolder "${STAGING_DIR}" -ov -format UDZO "${DMG_PATH}"
+# `hdiutil create` is deprecated on macOS 27. diskutil creates an APFS volume
+# (hdiutil defaulted to HFS+), which is fine for the macOS 14 deployment
+# target. No -ov equivalent: DMG_PATH was removed above. The image is not
+# mounted afterwards; `set -e` aborts on a non-zero exit.
+diskutil image create from --format UDZO --volumeName "${VOLUME_NAME}" "${STAGING_DIR}" "${DMG_PATH}"
 
 # Fixed identifier: codesign would otherwise derive a filename-based one,
 # truncated at the first dot ("FloTile-0"), which changes per release.
