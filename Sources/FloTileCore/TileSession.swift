@@ -57,7 +57,7 @@ public final class TileSession {
         return outcome
     }
 
-    /// Handles a tile click: restores when the guarded toggle allows it, else tiles afresh.
+    /// Handles a tile click: restores or maximizes when the guards allow it (see the type comment), else tiles afresh.
     public func handleClick(on screen: ScreenInfo) -> TileOutcome {
         lastDecision = nil
         guard windowSystem.isTrusted else { return .accessibilityNotGranted }

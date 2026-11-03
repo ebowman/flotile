@@ -6,13 +6,13 @@ FlöTile is a macOS menu bar app that tiles the front app's windows into a tidy 
 
 ## What it does
 
-A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. A second plain click restores the previous layout, but only if the same app is still frontmost on the same display, the windows the tiling moved are all still there, unmoved and unresized, and no new window has appeared since; a window that could not be moved is ignored by that check and left where it is. Otherwise the click tiles again. Undo is single level.
+A plain click on the FlöTile menu bar icon tiles every standard window of the frontmost app on the display whose menu bar you clicked into a uniform grid that fills that display. With **Maximize on Second Click** on (the default), a second plain click gives every tiled window that display's full usable area (the visible frame, so the menu bar and Dock stay clear; this is not macOS full screen) while keeping the windows' stacking order, and a third plain click restores the original layout; with the setting off, the second click restores. Every step is guarded: it continues only if the same app is still frontmost on the same display, the windows the tiling moved are all still there, unmoved and unresized since the last step, and no new window has appeared; a window that could not be moved is ignored by that check and left where it is. Otherwise the click tiles again. A lone window that already fills the display skips the maximize step, so the second click restores. **Undo Tiling** in the menu always restores the original layout, from either step. Undo is single level.
 
 Option-click, right-click or control-click opens a menu with these items, in order:
 
 - **About FlöTile** (version, copyright and a link to the GitHub repository)
 - **Undo Tiling** (enabled only when an undo is currently valid)
-- **Settings…** (one toggle: Open at Login)
+- **Settings…** (two toggles: Open at Login, Maximize on Second Click)
 - **Check for Updates…**
 - **Quit FlöTile**
 
