@@ -25,7 +25,7 @@ final class SettingsViewLayoutTests: XCTestCase {
         let controller = NSHostingController(rootView: SettingsView(model: model))
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize
-        XCTAssertGreaterThanOrEqual(size.height, 100, "fittingSize was \(size)")
+        XCTAssertGreaterThanOrEqual(size.height, 160, "fittingSize was \(size)")
         XCTAssertGreaterThanOrEqual(size.width, 200, "fittingSize was \(size)")
     }
 

@@ -12,7 +12,7 @@ Option-click, right-click or control-click opens a menu with these items, in ord
 
 - **About FlöTile** (version, copyright and a link to the GitHub repository)
 - **Undo Tiling** (enabled only when an undo is currently valid)
-- **Settings…** (two toggles: Open at Login, Maximize on Second Click)
+- **Settings…** (Open at Login, Maximize on Second Click, Check for Updates Automatically with a time picker)
 - **Check for Updates…**
 - **Quit FlöTile**
 
