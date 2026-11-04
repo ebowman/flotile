@@ -85,8 +85,9 @@ final class UndoDecisionTests: XCTestCase {
     private let fill = CGRect(x: 0, y: 0, width: 1000, height: 800)
 
     private func decideMax(_ snap: TileSnapshot?, on: Bool = true, fillFrame: CGRect? = nil,
+                           pid: pid_t = 100, screen: ScreenID? = nil,
                            _ wins: [WindowInfo]) -> UndoDecision {
-        UndoDecision.decide(snapshot: snap, frontmostPID: 100, screenID: screen1, currentEligibleWindows: wins,
+        UndoDecision.decide(snapshot: snap, frontmostPID: pid, screenID: screen ?? screen1, currentEligibleWindows: wins,
                             maximizeOnSecondClick: on, fillFrame: fillFrame ?? fill)
     }
 
@@ -121,6 +122,18 @@ final class UndoDecisionTests: XCTestCase {
     func testGuardsWinWithSettingOn() {
         XCTAssertEqual(decideMax(snapshot(), exact + [win(3, f1)]), .tileFresh(.windowSetChanged))
         XCTAssertEqual(decideMax(snapshot(), [win(1, f1.offsetBy(dx: 20, dy: 0)), win(2, f2)]), .tileFresh(.framesChanged))
+    }
+
+    func testNilSnapshotWithSettingOn() {
+        XCTAssertEqual(decideMax(nil, exact), .tileFresh(.noSnapshot))
+    }
+
+    func testDifferentAppWithSettingOn() {
+        XCTAssertEqual(decideMax(snapshot(), pid: 101, exact), .tileFresh(.differentApp))
+    }
+
+    func testDifferentScreenWithSettingOn() {
+        XCTAssertEqual(decideMax(snapshot(), screen: ScreenID(2), exact), .tileFresh(.differentScreen))
     }
 
     func testNeverMovedWindowAloneDoesNotMaximize() {

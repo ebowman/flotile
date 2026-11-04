@@ -316,17 +316,30 @@ final class TileSessionTests: XCTestCase {
     }
 
     func testSettingTurnedOnAfterMaximizeStillRestores() {
-        var on = true
-        let (s, _) = make([win(1, x: 10), win(2, x: 20)], maximize: { on })
-        _ = s.handleClick(on: screen)
-        _ = s.handleClick(on: screen)
-        on = false
+        var setting = true
+        let originals = [win(1, x: 10), win(2, x: 20)]
+        let (s, ws) = make(originals, maximize: { setting })
+        // Setting on: tile, maximize, then flip off within the same session.
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertEqual(s.handleClick(on: screen), .maximized(count: 2))
+        XCTAssertEqual(s.lastDecision, .maximize)
+        setting = false
         XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
-        on = true
-        let (s2, _) = make([win(1, x: 10), win(2, x: 20)], maximize: { on })
-        _ = s2.handleClick(on: screen)
-        _ = s2.handleClick(on: screen)
-        XCTAssertEqual(s2.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
+        XCTAssertEqual(s.snapshotCount, 0)
+
+        // Setting off: tile, restore; then flip on and run a full cycle.
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+        setting = true
+        XCTAssertEqual(s.handleClick(on: screen), .tiled(count: 2))
+        XCTAssertEqual(s.handleClick(on: screen), .maximized(count: 2))
+        XCTAssertEqual(s.lastDecision, .maximize)
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.lastDecision, .restore)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
     }
 
     func testExplicitUndoAfterMaximizeRestoresOriginals() {
@@ -348,8 +361,13 @@ final class TileSessionTests: XCTestCase {
         XCTAssertEqual(s.handleClick(on: screen), .partial(succeeded: 0, failed: 2))
         XCTAssertEqual(s.lastDecision, .maximize)
         XCTAssertEqual(s.snapshotCount, 1)
+        let tiledFrames = ws.windowsByPID[100]!.map(\.frame)
         ws.failingWindowIDs = []
-        XCTAssertEqual(s.undo(on: screen), .restored(count: 2))
+        XCTAssertEqual(s.handleClick(on: screen), .maximized(count: 2))
+        XCTAssertEqual(s.lastDecision, .maximize)
+        XCTAssertNotEqual(ws.windowsByPID[100]!.map(\.frame), tiledFrames)
+        XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), [screen.visibleFrame, screen.visibleFrame])
+        XCTAssertEqual(s.handleClick(on: screen), .restored(count: 2))
         XCTAssertEqual(ws.windowsByPID[100]!.map(\.frame), originals.map(\.frame))
     }
 }
