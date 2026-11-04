@@ -32,7 +32,7 @@ FlöTile moves and resizes other apps' windows, which requires the Accessibility
 
 ## Updates
 
-Choose **Check for Updates…** from the menu. The app fetches the latest `appcast.json` from GitHub Releases and, if a newer version exists, downloads the DMG and verifies its SHA-256 checksum and its notarization before installing. Updates are manual only; the app never checks in the background.
+Choose **Check for Updates…** from the menu. The app fetches the latest `appcast.json` from GitHub Releases and, if a newer version exists, downloads the DMG and verifies its SHA-256 checksum and its notarization before installing. Once a day, at the time set in Settings (the toggle is on by default, at 10:00), FlöTile also quietly fetches `appcast.json` and shows the update alert only when a newer version exists. The alert offers Install and Relaunch, Remind Me Later and Skip This Version; a skipped version is not offered again automatically, but **Check for Updates…** will still install it. The automatic check stays silent when the app is up to date or you are offline, and a check missed while the Mac was asleep runs when it wakes. Nothing is installed without pressing Install and Relaunch. **Check for Updates…** works at any time and also resets the daily clock.
 
 ## Building from source
 

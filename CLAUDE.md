@@ -77,7 +77,7 @@ make release       # see docs/RELEASING.md (release-dry-run first)
 - Core talks to the system through protocols; the app supplies real adapters, tests supply fakes.
 - Plain click tiles the frontmost app's standard windows on the clicked display; with the Settings toggle "Maximize on Second Click" (on by default) a second unchanged click maximizes them to the display's visible frame and a third restores the original layout, otherwise the second click restores (the guard applies to every step, else the click tiles afresh; the menu also has Undo Tiling, which always restores); option/right/control-click opens the menu.
 - `TileSession` keeps one snapshot per app with a phase (`.tiled` or `.maximized`); a second unchanged click maximizes (setting on) or restores, a third restores, and a changed layout or new window means tiling afresh; WindowIDs are kept stable across enumerations by `StableHandleRegistry` in the Accessibility adapter.
-- The updater fetches `appcast.json` from GitHub Releases and verifies SHA-256 and notarization before installing; manual only.
+- The updater fetches `appcast.json` from GitHub Releases and verifies SHA-256 and notarization before installing; it runs manually via the menu plus a daily background check at a user-chosen time (`UpdateCheckPolicy`/`UpdateCheckStore` in Core, `AutomaticUpdateScheduler` in the app) that is silent unless an unskipped update exists and never runs under XCTest or `--self-test-*` runs.
 - The app is not sandboxed (Accessibility requires it), so distribution is Developer ID, not the Mac App Store.
 - Release pipeline in `scripts/`: build-app, make-dmg, notarize-dmg, publish-release (see `docs/RELEASING.md`).
 - CI: `.github/workflows/ci.yml` runs the coverage gate and app tests.
