@@ -13,6 +13,7 @@ final class UpdateCheckerTests: XCTestCase {
         var downloadError: Error?
         var verifyError: Error?
         var launchError: Error?
+        var skipped: String?
     }
 
     private static let manifest = UpdateManifest(
@@ -38,14 +39,17 @@ final class UpdateCheckerTests: XCTestCase {
             },
             discard: { _ in r.events.append("discard") },
             runAlert: { alert in r.events.append("alert"); r.alerts.append(alert); return r.response },
-            activate: { r.events.append("activate") }
+            activate: { r.events.append("activate") },
+            recordCheck: { _ in r.events.append("record") },
+            skippedVersion: { r.skipped },
+            recordSkippedVersion: { r.events.append("skip:\($0)") }
         )
     }
 
     func testUpToDate() async {
         let r = Recorder()
         await UpdateChecker.run(currentVersion: "2.0.0", dependencies: deps(r))
-        XCTAssertEqual(r.events, ["fetch", "activate", "alert"])
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert"])
         XCTAssertEqual(r.alerts.first?.messageText, UpdateCopy.upToDateTitle)
         XCTAssertTrue(r.alerts.first?.informativeText.contains("2.0.0") == true)
     }
@@ -54,7 +58,7 @@ final class UpdateCheckerTests: XCTestCase {
         let r = Recorder()
         r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
         await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r))
-        XCTAssertEqual(r.events, ["fetch", "activate", "alert", "download", "verify", "launch"])
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert", "download", "verify", "launch"])
         let alert = r.alerts[0]
         XCTAssertTrue(alert.messageText.contains("2.0.0"))
         XCTAssertTrue(alert.informativeText.contains("1.0.0"))
@@ -66,7 +70,7 @@ final class UpdateCheckerTests: XCTestCase {
         r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
         r.response = .alertSecondButtonReturn
         await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r))
-        XCTAssertEqual(r.events, ["fetch", "activate", "alert"])
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert"])
     }
 
     func testVerifyFailureShowsErrorAndDoesNotLaunch() async {
@@ -75,7 +79,7 @@ final class UpdateCheckerTests: XCTestCase {
         r.verifyError = UpdateVerificationError.notarizationFailed
         await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r))
         XCTAssertFalse(r.events.contains("launch"))
-        XCTAssertEqual(r.events, ["fetch", "activate", "alert", "download", "verify", "discard", "activate", "alert"])
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert", "download", "verify", "discard", "activate", "alert"])
         XCTAssertEqual(r.alerts[1].messageText, UpdateCopy.errorTitle)
         XCTAssertTrue(r.alerts[1].informativeText.contains("notarized"))
     }
@@ -113,5 +117,86 @@ final class UpdateCheckerTests: XCTestCase {
         UpdateChecker.checkForUpdates(currentVersion: "2.0.0", dependencies: deps(r))
         for _ in 0..<100 where r.alerts.isEmpty { try? await Task.sleep(nanoseconds: 20_000_000) }
         XCTAssertEqual(r.alerts.count, 1)
+    }
+
+    // MARK: background presentation
+
+    private func runBackground(_ r: Recorder) async {
+        await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .background)
+    }
+
+    func testBackgroundUpToDateIsSilent() async {
+        let r = Recorder()
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record"])
+    }
+
+    func testBackgroundFetchErrorIsSilentAndNotRecorded() async {
+        let r = Recorder()
+        r.fetchResult = .failure(UpdateFetchError.badResponse(status: 404))
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch"])
+    }
+
+    func testBackgroundInstall() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert", "download", "verify", "launch"])
+        XCTAssertEqual(r.alerts[0].buttons.map(\.title), ["Install and Relaunch", "Remind Me Later", "Skip This Version"])
+    }
+
+    func testBackgroundRemindLater() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.response = .alertSecondButtonReturn
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert"])
+    }
+
+    func testBackgroundSkipRecordsVersion() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.response = .alertThirdButtonReturn
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert", "skip:2.0.0"])
+    }
+
+    func testBackgroundSkippedVersionIsSilent() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.skipped = "2.0.0"
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record"])
+    }
+
+    func testBackgroundDifferentSkippedVersionStillAlerts() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.skipped = "1.5.0"
+        r.response = .alertSecondButtonReturn
+        await runBackground(r)
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert"])
+    }
+
+    func testInteractiveIgnoresSkippedVersion() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.skipped = "2.0.0"
+        r.response = .alertSecondButtonReturn
+        await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r))
+        XCTAssertEqual(r.events, ["fetch", "record", "activate", "alert"])
+        XCTAssertEqual(r.alerts[0].buttons.map(\.title), ["Install and Relaunch", "Cancel"])
+    }
+
+    func testBackgroundVerifyFailureStillAlerts() async {
+        let r = Recorder()
+        r.fetchResult = .success(.updateAvailable(manifest: Self.manifest))
+        r.verifyError = UpdateVerificationError.notarizationFailed
+        await runBackground(r)
+        XCTAssertTrue(r.events.contains("discard"))
+        XCTAssertFalse(r.events.contains("launch"))
+        XCTAssertEqual(r.events.filter { $0 == "alert" }.count, 2)
+        XCTAssertEqual(r.alerts[1].messageText, UpdateCopy.errorTitle)
     }
 }

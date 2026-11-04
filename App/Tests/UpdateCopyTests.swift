@@ -3,6 +3,14 @@ import FloTileCore
 @testable import FloTile
 
 final class UpdateCopyTests: XCTestCase {
+    func testRemindLaterButton() {
+        XCTAssertEqual(UpdateCopy.remindLaterButton, "Remind Me Later")
+    }
+
+    func testSkipVersionButton() {
+        XCTAssertEqual(UpdateCopy.skipVersionButton, "Skip This Version")
+    }
+
     func testUpToDateMentionsVersion() {
         XCTAssertFalse(UpdateCopy.upToDateTitle.isEmpty)
         XCTAssertTrue(UpdateCopy.upToDateBody(currentVersion: "1.2.3").contains("1.2.3"))

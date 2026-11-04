@@ -10,6 +10,8 @@ enum UpdateCopy {
     static let installButton = "Install and Relaunch"
     static let cancelButton = "Cancel"
     static let okButton = "OK"
+    static let remindLaterButton = "Remind Me Later"
+    static let skipVersionButton = "Skip This Version"
 
     static func upToDateBody(currentVersion: String) -> String {
         "\(appName) \(currentVersion) is the latest version."
