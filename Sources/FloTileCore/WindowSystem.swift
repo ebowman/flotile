@@ -21,9 +21,3 @@ public protocol WindowSystem: Sendable {
     /// Moves/resizes a window to `frame` (AppKit coordinates). Throws on per-window failure.
     func setFrame(_ frame: CGRect, of window: WindowID) throws
 }
-
-/// Source of the currently connected screens.
-public protocol ScreenProvider: Sendable {
-    /// The current screens.
-    func screens() -> [ScreenInfo]
-}

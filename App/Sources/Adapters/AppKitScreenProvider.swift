@@ -1,8 +1,8 @@
 import AppKit
 import FloTileCore
 
-/// `ScreenProvider` backed by `NSScreen`. Stateless, hence trivially Sendable.
-struct AppKitScreenProvider: ScreenProvider {
+/// Maps `NSScreen` to `ScreenInfo`. Stateless.
+struct AppKitScreenProvider {
     init() {}
 
     func screens() -> [ScreenInfo] {
