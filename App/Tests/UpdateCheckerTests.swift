@@ -14,6 +14,8 @@ final class UpdateCheckerTests: XCTestCase {
         var verifyError: Error?
         var launchError: Error?
         var skipped: String?
+        var gate: CheckedContinuation<UpdateCheckResult, Error>?
+        var suspendFetch = false
     }
 
     private static let manifest = UpdateManifest(
@@ -23,7 +25,13 @@ final class UpdateCheckerTests: XCTestCase {
     private func deps(_ r: Recorder) -> UpdateCheckerDependencies {
         let dmg = self.dmg
         return UpdateCheckerDependencies(
-            fetch: { _ in r.events.append("fetch"); return try r.fetchResult.get() },
+            fetch: { _ in
+                r.events.append("fetch")
+                if r.suspendFetch {
+                    return try await withCheckedThrowingContinuation { r.gate = $0 }
+                }
+                return try r.fetchResult.get()
+            },
             download: { _ in
                 r.events.append("download")
                 if let e = r.downloadError { throw e }
@@ -198,5 +206,41 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertFalse(r.events.contains("launch"))
         XCTAssertEqual(r.events.filter { $0 == "alert" }.count, 2)
         XCTAssertEqual(r.alerts[1].messageText, UpdateCopy.errorTitle)
+    }
+
+    // MARK: in-flight guard
+
+    func testSecondRunWhileFetchInFlightIsDropped() async {
+        let r = Recorder()
+        r.suspendFetch = true
+        let first = Task { @MainActor in
+            await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .background)
+        }
+        for _ in 0..<500 where !r.events.contains("fetch") { try? await Task.sleep(nanoseconds: 5_000_000) }
+        XCTAssertEqual(r.events, ["fetch"])
+
+        let second = await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .interactive)
+        XCTAssertFalse(second)
+        XCTAssertEqual(r.events, ["fetch"])
+        XCTAssertTrue(r.alerts.isEmpty)
+
+        r.gate?.resume(returning: .upToDate(manifest: Self.manifest))
+        let firstRan = await first.value
+        XCTAssertTrue(firstRan)
+        XCTAssertEqual(r.events.filter { $0 == "fetch" }.count, 1)
+        XCTAssertEqual(r.events.filter { $0 == "record" }.count, 1)
+    }
+
+    func testGuardResetsAfterCompletedAndFailedRuns() async {
+        let r = Recorder()
+        r.fetchResult = .failure(UpdateFetchError.badResponse(status: 500))
+        let failed = await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .background)
+        XCTAssertTrue(failed)
+        r.fetchResult = .success(.upToDate(manifest: Self.manifest))
+        let ok = await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .background)
+        XCTAssertTrue(ok)
+        let again = await UpdateChecker.run(currentVersion: "1.0.0", dependencies: deps(r), presentation: .background)
+        XCTAssertTrue(again)
+        XCTAssertEqual(r.events, ["fetch", "fetch", "record", "fetch", "record"])
     }
 }

@@ -56,9 +56,14 @@ struct UpdateCheckerDependencies {
 /// and applies to background checks only. Install failures (download,
 /// verification, launch) alert in both presentations. Every successful fetch
 /// records the check time before any alert; a failed fetch does not.
+///
+/// Concurrent manual and background checks are serialised by one in-flight
+/// guard: a second request while one runs is dropped, and the manual click
+/// will simply find the background alert if there is one.
 @MainActor
 enum UpdateChecker {
     private static let logger = Logger(subsystem: "ie.boboco.FloTile", category: "update-checker")
+    private static var inFlight = false
 
     /// Entry point for the "Check for Updates…" menu item.
     static func checkForUpdates(
@@ -71,29 +76,38 @@ enum UpdateChecker {
         }
     }
 
-    /// The whole flow, awaitable for tests.
+    /// The whole flow, awaitable for tests. Returns false when skipped because
+    /// another check is already in flight.
+    @discardableResult
     static func run(
         currentVersion: String,
         dependencies deps: UpdateCheckerDependencies,
         presentation: UpdateCheckPresentation = .interactive
-    ) async {
+    ) async -> Bool {
+        if inFlight {
+            logger.info("update check already in progress; ignoring \(String(describing: presentation), privacy: .public) request")
+            return false
+        }
+        inFlight = true
+        defer { inFlight = false }
+
         let result: UpdateCheckResult
         do {
             result = try await deps.fetch(currentVersion)
         } catch {
             if presentation == .background {
                 logger.info("background update check failed: \(UpdateCopy.fetchErrorMessage(error), privacy: .public)")
-                return
+                return true
             }
             present(error: UpdateCopy.fetchErrorMessage(error), deps)
-            return
+            return true
         }
 
         deps.recordCheck(Date())
 
         switch result {
         case .upToDate:
-            if presentation == .background { return }
+            if presentation == .background { return true }
             let alert = makeAlert(
                 title: UpdateCopy.upToDateTitle,
                 body: UpdateCopy.upToDateBody(currentVersion: currentVersion),
@@ -105,7 +119,7 @@ enum UpdateChecker {
         case .updateAvailable(let manifest):
             if presentation == .background, manifest.latestVersion == deps.skippedVersion() {
                 logger.info("background update check: version \(manifest.latestVersion, privacy: .public) is skipped")
-                return
+                return true
             }
             let buttons = presentation == .background
                 ? [UpdateCopy.installButton, UpdateCopy.remindLaterButton, UpdateCopy.skipVersionButton]
@@ -123,9 +137,10 @@ enum UpdateChecker {
             case .alertThirdButtonReturn where presentation == .background:
                 deps.recordSkippedVersion(manifest.latestVersion)
             default:
-                return
+                return true
             }
         }
+        return true
     }
 
     /// ORDER OF OPERATIONS IS THE SAFETY PROPERTY: download and verification
