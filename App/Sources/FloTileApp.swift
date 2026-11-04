@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsModel: SettingsModel?
     private var session: TileSession?
     private var terminationObserver: NSObjectProtocol?
+    private var updateScheduler: AutomaticUpdateScheduler?
 
     static func main() {
         let app = NSApplication.shared
@@ -84,8 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onCheckForUpdates: {
-                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
-                UpdateChecker.checkForUpdates(currentVersion: version)
+                UpdateChecker.checkForUpdates(currentVersion: Self.currentVersion())
             },
             onQuit: { NSApp.terminate(nil) }
         )
@@ -106,6 +106,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !controller.install() {
             Self.logger.warning("Could not install status item")
         }
+
+        let scheduler = AutomaticUpdateScheduler(
+            isEnabled: { [weak model] in model?.automaticUpdateChecks ?? true },
+            minuteOfDay: { [weak model] in model?.automaticUpdateCheckMinute ?? UpdateCheckPolicy.defaultMinuteOfDay },
+            store: UpdateCheckStore(),
+            check: {
+                await UpdateChecker.run(currentVersion: Self.currentVersion(), dependencies: .live,
+                                        presentation: .background)
+            }
+        )
+        updateScheduler = scheduler
+        if AutomaticUpdateScheduler.shouldRunAutomatically(
+            arguments: CommandLine.arguments, environment: ProcessInfo.processInfo.environment) {
+            scheduler.start()
+        } else {
+            Self.logger.info("Automatic update checks disabled for this run")
+        }
+    }
+
+    private static func currentVersion() -> String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
     }
 
     #if DEBUG
