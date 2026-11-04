@@ -26,6 +26,17 @@ resolve_prev_tag() {
 }
 
 # write_release_notes OWNER REPO VERSION TAG SHA256 NOTES_FILE
+# Reads commit subjects on stdin, writes What's new bullets on stdout.
+# Drops beads:/Merge subjects, any leading "Bump" (case-insensitive), anything
+# mentioning MARKETING_VERSION, and empty lines. Always returns 0.
+filter_release_subjects() {
+    { grep -vE '^(beads:|Merge )' \
+        | grep -viE '^bump' \
+        | grep -vE 'MARKETING_VERSION' \
+        | grep -vE '^[[:space:]]*$' \
+        | sed -E 's/^FloTile-[a-z0-9.]+: //; s/^/- /'; } || true
+}
+
 write_release_notes() {
     local owner="$1" repo="$2" version="$3" tag="$4" sha="$5" out="$6"
     local prev bullets="" extra=""
@@ -35,9 +46,7 @@ write_release_notes() {
             git fetch --quiet origin "refs/tags/${prev}:refs/tags/${prev}" \
                 || fail "cannot fetch previous tag ${prev} from origin"
         fi
-        bullets="$(git log --no-merges --format='%s' "${prev}..HEAD" \
-            | grep -vE '^(beads:|Bump version|Merge )' \
-            | sed -E 's/^FloTile-[a-z0-9.]+: //; s/^/- /' || true)"
+        bullets="$(git log --no-merges --format='%s' "${prev}..HEAD" | filter_release_subjects || true)"
     fi
     if [ -n "${RELEASE_NOTES_EXTRA:-}" ]; then
         [ -f "${RELEASE_NOTES_EXTRA}" ] && [ -r "${RELEASE_NOTES_EXTRA}" ] \

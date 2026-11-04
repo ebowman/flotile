@@ -11,6 +11,7 @@ coverage:
 
 scripts-test:
 	scripts/test-coverage-gate.sh
+	scripts/test-publish-release-notes.sh
 
 clean:
 	swift package clean
