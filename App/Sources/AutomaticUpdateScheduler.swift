@@ -7,7 +7,11 @@ import FloTileCore
 ///
 /// Timers are invalidated by `stop()`. The owner (AppDelegate) keeps the
 /// instance alive for the process lifetime. The scheduler never writes to the
-/// store; `UpdateChecker` records the check time.
+/// store; `UpdateChecker` records the check time, and only after a successful
+/// fetch. A check that leaves the stored time unchanged is treated as failed
+/// and delays the next attempt by `failureBackoff`. That backoff is in memory
+/// only (reset on relaunch), applies only after an unsuccessful background
+/// check, and clears on the next success.
 @MainActor
 final class AutomaticUpdateScheduler {
     private let isEnabled: () -> Bool
@@ -18,10 +22,13 @@ final class AutomaticUpdateScheduler {
     private let check: () async -> Void
     private let initialDelay: TimeInterval
     private let pollInterval: TimeInterval
+    private let failureBackoff: TimeInterval
 
     private var initialTimer: Timer?
     private var pollTimer: Timer?
     private var checkInFlight = false
+    /// In-memory only: earliest time to retry after a failed background check.
+    private var retryNotBefore: Date?
 
     init(
         isEnabled: @escaping () -> Bool,
@@ -31,7 +38,8 @@ final class AutomaticUpdateScheduler {
         calendar: Calendar = .current,
         check: @escaping () async -> Void,
         initialDelay: TimeInterval = 60,
-        pollInterval: TimeInterval = 300
+        pollInterval: TimeInterval = 300,
+        failureBackoff: TimeInterval = 3_600
     ) {
         self.isEnabled = isEnabled
         self.minuteOfDay = minuteOfDay
@@ -41,6 +49,7 @@ final class AutomaticUpdateScheduler {
         self.check = check
         self.initialDelay = initialDelay
         self.pollInterval = pollInterval
+        self.failureBackoff = failureBackoff
     }
 
     /// False under XCTest or any `--self-test*` argument.
@@ -75,9 +84,17 @@ final class AutomaticUpdateScheduler {
         guard isEnabled() else { return }
         guard UpdateCheckPolicy.isDue(lastCheck: store.loadLastCheck(), now: now(),
                                       minuteOfDay: minuteOfDay(), calendar: calendar) else { return }
+        if let retryNotBefore, now() < retryNotBefore { return }
         guard !checkInFlight else { return }
         checkInFlight = true
         defer { checkInFlight = false }
+        let before = store.loadLastCheck()
         await check()
+        // UpdateChecker records the time only on success; unchanged means failed.
+        if store.loadLastCheck() == before {
+            retryNotBefore = now().addingTimeInterval(failureBackoff)
+        } else {
+            retryNotBefore = nil
+        }
     }
 }

@@ -36,14 +36,18 @@ final class AutomaticUpdateSchedulerTests: XCTestCase {
         calendar.date(from: DateComponents(year: y, month: mo, day: d, hour: h, minute: mi))!
     }
 
-    private func makeScheduler(check: (() async -> Void)? = nil) -> AutomaticUpdateScheduler {
+    private func makeScheduler(
+        failureBackoff: TimeInterval = 3_600,
+        check: (() async -> Void)? = nil
+    ) -> AutomaticUpdateScheduler {
         AutomaticUpdateScheduler(
             isEnabled: { [unowned self] in enabled },
             minuteOfDay: { 600 },
             store: store,
             now: { [unowned self] in current },
             calendar: calendar,
-            check: check ?? { [unowned self] in calls += 1 }
+            check: check ?? { [unowned self] in calls += 1 },
+            failureBackoff: failureBackoff
         )
     }
 
@@ -93,6 +97,59 @@ final class AutomaticUpdateSchedulerTests: XCTestCase {
         while continuation == nil || calls < 2 { await Task.yield() }
         continuation?.resume()
         await second.value
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testFailedCheckBacksOffThenRetriesAfterBackoff() async {
+        let scheduler = makeScheduler()
+        await scheduler.tick()
+        XCTAssertEqual(calls, 1)
+        current = current.addingTimeInterval(300)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 1)
+        current = date(2026, 11, 4, 13, 0)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testSuccessfulCheckDoesNotBackOff() async {
+        let scheduler = makeScheduler(check: { [unowned self] in
+            calls += 1
+            store.recordLastCheck(current)
+        })
+        await scheduler.tick()
+        XCTAssertEqual(calls, 1)
+        current = date(2026, 11, 5, 10, 0)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testBackoffClearsAfterSubsequentSuccess() async {
+        var succeed = false
+        let scheduler = makeScheduler(check: { [unowned self] in
+            calls += 1
+            if succeed { store.recordLastCheck(current) }
+        })
+        await scheduler.tick()
+        XCTAssertEqual(calls, 1)
+        succeed = true
+        current = date(2026, 11, 4, 13, 0)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 2)
+        // Success recorded; next day's scheduled time is due and not blocked.
+        current = date(2026, 11, 5, 10, 0)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 3)
+    }
+
+    func testFailureBackoffIsInjectable() async {
+        let scheduler = makeScheduler(failureBackoff: 600)
+        await scheduler.tick()
+        current = current.addingTimeInterval(599)
+        await scheduler.tick()
+        XCTAssertEqual(calls, 1)
+        current = current.addingTimeInterval(1)
+        await scheduler.tick()
         XCTAssertEqual(calls, 2)
     }
 
