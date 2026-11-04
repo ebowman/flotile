@@ -6,16 +6,16 @@ final class SettingsModelMaximizeTests: XCTestCase {
     private var suite = ""
     private var defaults: UserDefaults!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         suite = "FloTileTests-" + UUID().uuidString
         defaults = UserDefaults(suiteName: suite)!
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suite)
         defaults = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func model() -> SettingsModel {
