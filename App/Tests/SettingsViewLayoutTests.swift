@@ -8,10 +8,10 @@ import FloTileCore
 final class SettingsViewLayoutTests: XCTestCase {
     private var suiteNames: [String] = []
 
-    override func tearDown() {
+    override func tearDown() async throws {
         for name in suiteNames { UserDefaults().removePersistentDomain(forName: name) }
         suiteNames = []
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeModel() -> SettingsModel {
