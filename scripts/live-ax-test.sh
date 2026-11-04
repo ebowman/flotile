@@ -134,6 +134,10 @@ run_self_test() {
 cleanup() {
   # Close the Fonts panel only if this script opened it, and close only the
   # documents this script created (by name). Never "every document".
+  # A panel that appeared late (after a failed open attempt) still needs closing.
+  if pgrep -x TextEdit >/dev/null 2>&1; then
+    declare -F panel_exists >/dev/null && panel_exists && PANEL_OPENED=1
+  fi
   if [[ "$PANEL_OPENED" == "1" ]]; then
     osascript >/dev/null 2>&1 <<'OSA' || true
 tell application "System Events"
@@ -215,10 +219,17 @@ end tell
 OSA
 # Record every document now open: the guard ensured the only pre-existing one (if any)
 # is a pristine untitled document adopted from launch, so all of them are ours to close.
+names="$(te_query "reading TextEdit document names" \
+  'tell application "TextEdit" to set AppleScript'"'"'s text item delimiters to linefeed' \
+  'tell application "TextEdit" to (name of every document) as text')"
 while IFS= read -r name; do
+  name="${name#"${name%%[! ]*}"}"
   [[ -n "$name" ]] && CREATED_DOCS+=("$name")
-done < <(osascript -e 'tell application "TextEdit" to set AppleScript'"'"'s text item delimiters to linefeed' \
-                   -e 'tell application "TextEdit" to (name of every document) as text' | tr ',' '\n' | sed 's/^ *//')
+done <<<"$names"
+if [[ "${#CREATED_DOCS[@]}" -ne 2 ]]; then
+  echo "live-ax-test: expected 2 TextEdit documents after setup, got ${#CREATED_DOCS[@]}: $names" >&2
+  exit 1
+fi
 PANEL_NAME="Fonts"
 # Open the Fonts panel via Format > Font > Show Fonts (deterministic), retrying
 # until the window exists. Last attempt falls back to Cmd-T if the menu path is missing.
